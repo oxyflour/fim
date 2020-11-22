@@ -21,6 +21,13 @@ fit::Coefficient::Coefficient(Matrix &mat, float dt) {
     }
 }
 
+fit::Coefficient::~Coefficient() {
+    delete le;
+    delete re;
+    delete lh;
+    delete rh;
+}
+
 void fit::Coefficient::UpdateFromPort(fit::Port &port) {
     auto &pos = port.pos;
     for (int i = 0, len = pos.size(), c = len / 2; i < len - 1; i ++) {

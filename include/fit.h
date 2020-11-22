@@ -33,6 +33,7 @@ namespace fit {
 
     typedef struct Coefficient {
         Coefficient(Matrix &mat, float dt);
+        ~Coefficient();
         Grid *grid;
         float *le, *re, *lh, *rh;
         void UpdateFromPort(Port &port);
