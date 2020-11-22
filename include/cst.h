@@ -25,6 +25,10 @@ namespace cst {
         std::string name, material;
     } solid_type;
 
+    typedef struct units_type {
+        float geometry, time, frequency;
+    } units_type;
+
     typedef struct Project {
         Project(std::string &path, std::string &version);
         ~Project();
@@ -37,6 +41,7 @@ namespace cst {
         std::vector<port_type> ports;
         std::vector<solid_type> solids;
         excitation_type excitation;
+        units_type units;
 
 private:
         std::string path;

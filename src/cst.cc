@@ -59,9 +59,17 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
         excitation.x.push_back(x);
         excitation.y.push_back(y);
     }
+
+    auto jUnits = meta["units"];
+    units.geometry = jUnits["geometry"].get<float>();
+    units.time = jUnits["time"].get<float>();
+    units.frequency = jUnits["frequency"].get<float>();
 }
 
 cst::Project::Project(string &path, string &version) {
+    this->path = path;
+    this->version = version;
+
     auto cstPath = getCstPath(version);
     if (dllCache.count(version) == 0) {
         wchar_t cwd[1024] = { 0 };
@@ -117,7 +125,7 @@ Grid cst::Project::GetHexGrid() {
     for (int i = 0; i < nz; i ++) {
         zs[i] = array[i + nx + ny];
     }
-    return Grid { xs, ys, zs };
+    return Grid { units.geometry, xs, ys, zs };
 }
 
 vector<float> cst::Project::GetMatrix(int mat) {
