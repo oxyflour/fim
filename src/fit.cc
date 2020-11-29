@@ -1,7 +1,20 @@
-#include <regex>
 #include "fit.h"
+#include "generated/inc_chunk_cu.h"
 #include "utils/assert.h"
+
+#include <regex>
+#include <filesystem>
 using namespace std;
+
+fit::Port::Port(Grid &grid, float3 src, float3 dst, float epsi) {
+    this->src = src;
+    this->dst = dst;
+    pos = grid.ParsePort(src, dst, epsi);
+    auto c = pos.size() / 2;
+    auto d = pos[c] - pos[c - 1];
+    idx = grid.GetFlatIndex(pos[c - 1], 0);
+    dir = d.x ? 0 : d.y ? 1 : 2;
+};
 
 fit::Coefficient::Coefficient(Matrix &mat, float dt) {
     grid = mat.grid;
@@ -41,8 +54,7 @@ void fit::Coefficient::UpdateFromPort(fit::Port &port) {
 }
 
 static auto Compile(Grid &grid, fit::Port &port) {
-    auto root = utils::dirname(utils::dirname(__FILE__)),
-        source = utils::readFile(root + "/src/chunk.cu");
+    auto source = string(SRC_CHUNK_CU);
     source = regex_replace(source, regex("_\\$i(\\W)"), "_0$1");
     source = regex_replace(source, regex("\\$nx(\\W)"), to_string(grid.xs.size()) + "$1");
     source = regex_replace(source, regex("\\$ny(\\W)"), to_string(grid.ys.size()) + "$1");
@@ -50,26 +62,37 @@ static auto Compile(Grid &grid, fit::Port &port) {
     source = regex_replace(source, regex("\\$sg(\\W)"), to_string(port.idx) + "$1");
     source = regex_replace(source, regex("\\$sd(\\W)"), to_string(port.dir) + "$1");
 
-    auto inc = root + "/include",
-        src = root + "/build/tpl.cu",
-        dll = root + "/build/tpl.dll",
-        log = root + "/build/tpl.log",
+    auto tmp = filesystem::temp_directory_path() / ("fit-compile-" + utils::random(8)),
+        utils = tmp / "include" / "utils";
+    auto inc = (tmp / "include").u8string(),
+        src = (tmp / "tpl.cu").u8string(),
+        dll = (tmp / "tpl.dll").u8string(),
+        log = (tmp / "tpl.log").u8string(),
         cmd = "nvcc -I" + inc + " " + src + " --shared -o " + dll +" > " + log + " 2>&1";
+
+    filesystem::create_directories(utils);
     utils::writeFile(src, source);
+    for (int i = 0, n = sizeof(INC_FILES) / sizeof(char *) - 1; i < n; i +=2) {
+        utils::writeFile((utils / INC_FILES[i]).u8string(), INC_FILES[i + 1]);
+    }
+
     auto code = system(cmd.c_str());
     ASSERT(code == 0, "compile " + dll + " failed,\ncmd: " + cmd + "\nmessage: " + utils::readFile(log));
-    return dll;
+
+    // TODO: remove tmp folder
+    // filesystem::remove_all(tmp);
+    return new utils::DLL(dll);
 }
 
 fit::Solver::Solver(Matrix &mats, float dt, vector<Port> &ports) {
-    ASSERT(ports.size() == 1, "FIXME: only one port fupported");
     auto coe = Coefficient(mats, dt);
     for (auto &port : ports) {
         coe.UpdateFromPort(port);
     }
 
     auto &grid = *mats.grid;
-    dll = new utils::DLL(Compile(grid, ports[0]));
+    ASSERT(ports.size() == 1, "FIXME: only one port supported");
+    dll = Compile(grid, ports[0]);
     FnInit = (InitPTR) dll->getProc("init_0");
     FnStep = (StepPTR) dll->getProc("step_0");
     FnQuit = (QuitPTR) dll->getProc("step_0");

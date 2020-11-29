@@ -10,12 +10,12 @@ int main() {
     auto eps = proj.GetMatrix(100).data(), mue = proj.GetMatrix(101).data();
     auto mats = fit::Matrix(grid, eps, mue);
 
-    auto mesher = occ::Mesher(grid, string("E:\\Projects\\cst-demo\\dipole-test-sphere.stp"));
-    return 0;
+    //auto mesher = occ::Mesher(grid, proj.units.geometry, string("E:\\Projects\\cst-demo\\dipole-test-sphere.stp"));
+    //return 0;
 
     ASSERT(proj.ports.size() == 1, "Only one port supported");
     auto pos = proj.ports[0];
-    auto port = fit::Port(grid, pos.src, pos.dst, 1e-6);
+    auto port = fit::Port(grid, pos.src, pos.dst);
 
     // TODO
     float t = 0, dt = 1e-12, steps = 1e5;

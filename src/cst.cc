@@ -1,7 +1,9 @@
 #include "cst.h"
 #include "utils.h"
+#include "generated/cst_run_bas.h"
 
 #include <fstream>
+#include <filesystem>
 using namespace std;
 
 #include <nlohmann/json.hpp>
@@ -22,13 +24,16 @@ static auto getCstPath(string &version) {
 }
 
 void cst::Project::ForkAndExportSettings(string cstPath) {
-    auto root = utils::dirname(utils::dirname(__FILE__)),
-        exe = cstPath + "AMD64\\CST DESIGN ENVIRONMENT_AMD64.exe",
-        bas = root + "/tool/run.bas",
-        log = root + "/build/run.log",
-        json = root + "/build/run.json",
+    auto tmp = filesystem::temp_directory_path() / ("cst-parse-" + utils::random(8));
+    filesystem::create_directories(tmp);
+
+    auto exe = cstPath + "AMD64\\CST DESIGN ENVIRONMENT_AMD64.exe",
+        bas = (tmp / "run.bas").u8string(),
+        log = (tmp / "run.log").u8string(),
+        json = (tmp / "run.json").u8string(),
         // https://stackoverflow.com/questions/9964865/c-system-not-working-when-there-are-spaces-in-two-different-parameters
         cmd = "\"\"" + exe + "\" -i -m \"" + bas + "\" > " + log + " 2>&1\"";
+    utils::writeFile(bas, SRC_CST_RUN_BAS);
     _putenv(("CST_PATH=" + path).c_str());
     _putenv(("JSON_PATH=" + json).c_str());
     _putenv("EXPORT_SOLIDS=TRUE");
@@ -64,6 +69,9 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
     units.geometry = jUnits["geometry"].get<float>();
     units.time = jUnits["time"].get<float>();
     units.frequency = jUnits["frequency"].get<float>();
+
+    // TODO: clean up
+    // filesystem::remove_all(tmp);
 }
 
 cst::Project::Project(string &path, string &version) {
@@ -125,7 +133,7 @@ Grid cst::Project::GetHexGrid() {
     for (int i = 0; i < nz; i ++) {
         zs[i] = array[i + nx + ny];
     }
-    return Grid { units.geometry, xs, ys, zs };
+    return Grid { xs, ys, zs };
 }
 
 vector<float> cst::Project::GetMatrix(int mat) {

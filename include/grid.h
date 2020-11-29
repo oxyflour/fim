@@ -18,7 +18,6 @@ typedef struct int3 {
 } int3;
 
 typedef struct Grid {
-    float unit;
     std::vector<double> xs, ys, zs;
     float3 At(int3 idx);
     int GetFlatIndex(int3 idx, int dir);

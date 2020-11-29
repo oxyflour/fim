@@ -20,9 +20,13 @@ inline lib_type dlopen(const char *libname) {
 inline lib_func dlsym(lib_type mod, const char *symname) {
     return GetProcAddress(mod, symname);
 }
+#else
+// TODO
 #endif
 
 namespace utils {
+    std::string random(const int len);
+
     std::wstring utf8ToWstring(const std::string& str);
     std::string wstringToUtf8(const std::wstring& str);
 
@@ -38,7 +42,7 @@ namespace utils {
         lib_type module;
         std::string path;
         std::map<std::string, FARPROC> procs;
-        lib_func getProc(std::string name);
+        lib_func __stdcall getProc(std::string name);
     } DLL;
 }
 

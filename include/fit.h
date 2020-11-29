@@ -16,13 +16,7 @@ namespace fit {
         std::vector<int3> pos;
         int idx;
         int dir;
-        Port(Grid &grid, float3 src, float3 dst, float epsi) : src{src}, dst{dst} {
-            pos = grid.ParsePort(src, dst, epsi);
-            auto c = pos.size() / 2;
-            auto d = pos[c] - pos[c - 1];
-            idx = grid.GetFlatIndex(pos[c - 1], 0);
-            dir = d.x ? 0 : d.y ? 1 : 2;
-        };
+        Port(Grid &grid, float3 src, float3 dst, float epsi = 1e-6);
     } Port;
 
     typedef struct Matrix {
