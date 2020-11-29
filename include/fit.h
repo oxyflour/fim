@@ -1,14 +1,9 @@
 #include "utils.h"
 #include "grid.h"
+#include "chunk.h"
 
 #ifndef FIT_H
 #define FIT_H
-
-extern "C" {
-    typedef int (__cdecl *InitPTR)(float *le, float *re, float *lh, float *rh);
-    typedef float (__cdecl *StepPTR)(float s);
-    typedef int (__cdecl *QuitPTR)();
-}
 
 namespace fit {
     typedef struct Port {
@@ -38,9 +33,9 @@ namespace fit {
         ~Solver();
         float Step(float s);
         utils::DLL *dll;
-        InitPTR FnInit;
-        StepPTR FnStep;
-        QuitPTR FnQuit;
+        decltype(&init_$i) FnInit;
+        decltype(&step_$i) FnStep;
+        decltype(&quit_$i) FnQuit;
     } Solver;
 }
 

@@ -1,16 +1,16 @@
 #include <string>
-#include <stdio.h>
+#include <exception>
+#include <iostream>
 
 #ifndef ASSERT_H
 #define ASSERT_H
 
 #define ASSERT(ok, msg) do { if (!(ok)) _panic(msg, __FILE__, __LINE__); } while (0);
-inline void _panic(std::string msg, const char *file, int line, bool abort=true)
+inline void _panic(std::string msg, const char *file, int line)
 {
-    fprintf(stderr, "FATAL: %s at %s:%d\n", msg.c_str(), file, line);
-    if (abort) {
-        exit(1);
-    }
+    auto m = "FATAL: " + msg + " at " + file + ":" + std::to_string(line) + "\n";
+    std::cerr << m;
+    throw std::exception(m.c_str());
 }
 
 #endif

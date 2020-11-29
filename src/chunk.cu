@@ -1,4 +1,5 @@
 #include "utils/cuda_utils.h"
+#include "chunk.h"
 
 #ifdef __INTELLISENSE__
 #define $nx 1

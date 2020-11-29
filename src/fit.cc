@@ -62,18 +62,19 @@ static auto Compile(Grid &grid, fit::Port &port) {
     source = regex_replace(source, regex("\\$sg(\\W)"), to_string(port.idx) + "$1");
     source = regex_replace(source, regex("\\$sd(\\W)"), to_string(port.dir) + "$1");
 
-    auto tmp = filesystem::temp_directory_path() / ("fit-compile-" + utils::random(8)),
-        utils = tmp / "include" / "utils";
+    auto tmp = filesystem::temp_directory_path() / ("fit-compile-" + utils::random(8));
     auto inc = (tmp / "include").u8string(),
         src = (tmp / "tpl.cu").u8string(),
         dll = (tmp / "tpl.dll").u8string(),
         log = (tmp / "tpl.log").u8string(),
         cmd = "nvcc -I" + inc + " " + src + " --shared -o " + dll +" > " + log + " 2>&1";
 
-    filesystem::create_directories(utils);
+    filesystem::create_directories(tmp);
     utils::writeFile(src, source);
     for (int i = 0, n = sizeof(INC_FILES) / sizeof(char *) - 1; i < n; i +=2) {
-        utils::writeFile((utils / INC_FILES[i]).u8string(), INC_FILES[i + 1]);
+        auto path = tmp / INC_FILES[i];
+        filesystem::create_directories(path.parent_path());
+        utils::writeFile(path.u8string(), INC_FILES[i + 1]);
     }
 
     auto code = system(cmd.c_str());
@@ -91,9 +92,9 @@ fit::Solver::Solver(Matrix &mats, float dt, vector<Port> &ports) {
     auto &grid = *mats.grid;
     ASSERT(ports.size() == 1, "FIXME: only one port supported");
     dll = Compile(grid, ports[0]);
-    FnInit = (InitPTR) dll->getProc("init_0");
-    FnStep = (StepPTR) dll->getProc("step_0");
-    FnQuit = (QuitPTR) dll->getProc("step_0");
+    FnInit = (decltype(FnInit)) dll->getProc("init_0");
+    FnStep = (decltype(FnStep)) dll->getProc("step_0");
+    FnQuit = (decltype(FnQuit)) dll->getProc("step_0");
     ASSERT(FnInit && FnStep && FnQuit, "get function failed");
 
     ASSERT(FnInit(coe.le, coe.re, coe.lh, coe.rh) == 0, "solver init failed");
