@@ -28,5 +28,6 @@ int main() {
         sigy[c] = solver.Step(s);
     }
 
+    cout << "ok" << endl;
     return 0;
 }

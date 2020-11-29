@@ -64,14 +64,14 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
         excitation.x.push_back(x);
         excitation.y.push_back(y);
     }
+    input.close();
 
     auto jUnits = meta["units"];
     units.geometry = jUnits["geometry"].get<float>();
     units.time = jUnits["time"].get<float>();
     units.frequency = jUnits["frequency"].get<float>();
 
-    // TODO: clean up
-    // filesystem::remove_all(tmp);
+    filesystem::remove_all(tmp);
 }
 
 cst::Project::Project(string &path, string &version) {

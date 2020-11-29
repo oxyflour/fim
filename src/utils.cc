@@ -32,15 +32,11 @@ string utils::wstringToUtf8(const wstring& str) {
     return myconv.to_bytes(str);
 }
 
-string utils::dirname(const string& fname) {
-     size_t pos = fname.find_last_of("\\/");
-     return string::npos == pos ? "" : fname.substr(0, pos);
-}
-
 string utils::readFile(const string& fname) {
     ifstream stream(fname);
     stringstream content;
     content << stream.rdbuf();
+    stream.close();
     return content.str();
 }
 
@@ -87,6 +83,10 @@ utils::DLL::DLL(string path) {
     auto code = -1;
 #endif
     ASSERT(module != NULL, "LoadLibrary Error: " + path + " (" + to_string(code) + ")");
+}
+
+utils::DLL::~DLL() {
+    dlclose(module);
 }
 
 lib_func __stdcall utils::DLL::getProc(string name) {

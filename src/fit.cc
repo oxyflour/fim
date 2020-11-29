@@ -79,8 +79,6 @@ static auto Compile(Grid &grid, fit::Port &port) {
     auto code = system(cmd.c_str());
     ASSERT(code == 0, "compile " + dll + " failed,\ncmd: " + cmd + "\nmessage: " + utils::readFile(log));
 
-    // TODO: remove tmp folder
-    // filesystem::remove_all(tmp);
     return new utils::DLL(dll);
 }
 
@@ -103,7 +101,9 @@ fit::Solver::Solver(Matrix &mats, float dt, vector<Port> &ports) {
 
 fit::Solver::~Solver() {
     FnQuit();
+    auto path = dll->path;
     delete dll;
+    filesystem::remove_all(filesystem::path(path).parent_path());
 }
 
 float fit::Solver::Step(float s) {

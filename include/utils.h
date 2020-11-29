@@ -20,8 +20,12 @@ inline lib_type dlopen(const char *libname) {
 inline lib_func dlsym(lib_type mod, const char *symname) {
     return GetProcAddress(mod, symname);
 }
+inline int dlclose(lib_type mod) {
+    return FreeLibrary(mod);
+}
 #else
-// TODO
+typedef void* lib_type;
+typedef void* lib_func;
 #endif
 
 namespace utils {
@@ -30,8 +34,6 @@ namespace utils {
     std::wstring utf8ToWstring(const std::string& str);
     std::string wstringToUtf8(const std::wstring& str);
 
-    std::string dirname(const std::string& fname);
-
     std::string readFile(const std::string& fname);
     void writeFile(const std::string& fname, const std::string& content);
 
@@ -39,6 +41,7 @@ namespace utils {
 
     typedef struct DLL {
         DLL(std::string path);
+        ~DLL();
         lib_type module;
         std::string path;
         std::map<std::string, FARPROC> procs;
