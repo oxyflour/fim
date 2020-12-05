@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "generated/cst_run_bas.h"
 
+#include <regex>
 #include <fstream>
 #include <filesystem>
 using namespace std;
@@ -23,6 +24,10 @@ static auto getCstPath(string &version) {
     return utils::wstringToUtf8(buf);
 }
 
+map<string, float> UNITS = {
+    { "ns", 0 },
+};
+
 void cst::Project::ForkAndExportSettings(string cstPath) {
     auto tmp = filesystem::temp_directory_path() / ("cst-parse-" + utils::random(8));
     filesystem::create_directories(tmp);
@@ -34,21 +39,39 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
         // https://stackoverflow.com/questions/9964865/c-system-not-working-when-there-are-spaces-in-two-different-parameters
         cmd = "\"\"" + exe + "\" -i -m \"" + bas + "\" > " + log + " 2>&1\"";
     utils::writeFile(bas, SRC_CST_RUN_BAS);
+
     _putenv(("CST_PATH=" + path).c_str());
     _putenv(("JSON_PATH=" + json).c_str());
     _putenv("EXPORT_SOLIDS=TRUE");
     _putenv("BUILD_MATRIX=TRUE");
     auto code = system(cmd.c_str());
     ASSERT(code == 0, "Parse CST Project failed: " + cmd + ", log " + log);
-    auto meta = json::parse(utils::readFile(json));
 
+    auto projPath = regex_replace(path, regex("\\.cst$"), "");
+    auto logPath = filesystem::path(projPath) / "Result" / "Model.log";
+    if (filesystem::exists(logPath)) {
+        auto log = utils::readFile(logPath.u8string());
+        smatch dtMatch;
+        regex_match(log, dtMatch, regex("without subcycles:\\s+(\\S+) (\\w+)"));
+        if (dtMatch.size()) {
+            auto unit = dtMatch[2];
+            if (UNITS.count(unit) > 0) {
+                dt = stof(dtMatch[1]) * UNITS[unit];
+            } else {
+                cerr << "WARN: unknown unit '" << unit << "'" << endl;
+            }
+        } else {
+            cerr << "WARN: cannot get dt from '" << logPath << "'" << endl;
+        }
+    }
+
+    auto meta = json::parse(utils::readFile(json));
     for (auto item : meta["ports"]) {
         auto jSrc = item["src"], jDst = item["dst"];
         auto src = float3 { jSrc[0].get<float>(), jSrc[1].get<float>(), jSrc[2].get<float>() };
         auto dst = float3 { jDst[0].get<float>(), jDst[1].get<float>(), jDst[2].get<float>() };
         ports.push_back(port_type { src, dst });
     }
-
     for (auto item : meta["solids"]) {
         auto name = item["name"].get<string>(),
             material = item["material"].get<string>();

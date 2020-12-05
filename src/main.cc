@@ -29,11 +29,11 @@ int main() {
     auto port = fit::Port(grid, pos.src, pos.dst);
 
     // TODO
-    float t = 0, dt = 1e-12, steps = 1e5;
-    auto solver = fit::Solver(mats, dt, vector<fit::Port>({ port }));
+    float t = 0, steps = 1e5;
+    auto solver = fit::Solver(mats, proj.dt, vector<fit::Port>({ port }));
 
     vector<float> sigx(steps), sigy(steps);
-    for (int c = 0; c < steps; c ++, t += dt) {
+    for (int c = 0; c < steps; c ++, t += proj.dt) {
         auto s = utils::interp1(proj.excitation.x, proj.excitation.y, t);
         sigx[c] = t;
         sigy[c] = solver.Step(s);
