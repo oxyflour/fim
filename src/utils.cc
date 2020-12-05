@@ -66,7 +66,7 @@ float utils::interp1(const vector<float> &xs, const vector<float> &ys, const flo
     auto i = binSearch(xs, x);
     if (i < 0) {
         return ys[0];
-    } else if (i > xs.size() - 1) {
+    } else if (i >= xs.size() - 1) {
         return ys[ys.size() - 1];
     } else {
         auto dx = xs[i + 1] - xs[i];

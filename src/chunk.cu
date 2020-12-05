@@ -63,7 +63,7 @@ public:
 
 __device__ Chunk_$i<$nx, $ny, $nz, $sg, $sd> chunk_$i;
 __global__ void kernel_init_$i(float *le, float *re, float *lh, float *rh) {
-    constexpr int NXYZ = $nx * $ny * $nz, NVAR = NXYZ * 3;
+    constexpr int NXYZ = $nx * $ny * $nz;
     auto &c = chunk_$i;
     for (int i = cuIdx(x); i < NXYZ; i += cuDim(x)) {
         c.LEx[i] = le[i]; c.LEy[i] = le[i + NXYZ]; c.LEz[i] = le[i + NXYZ * 2];

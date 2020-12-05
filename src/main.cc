@@ -13,33 +13,42 @@ template <typename T> auto range(T from, T to, T delta) {
 }
 
 int main() {
-    auto grid = Grid { range<double>(-5, 5, 1), range<double>(-5, 5, 1), range<double>(-5, 5, 1) };
+    //auto grid = Grid { range<double>(-5, 5, 1), range<double>(-5, 5, 1), range<double>(-5, 5, 1) };
     //occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::sphere(float3 { 0, 0, 0 }, 3.5));
-    occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::box(float3 { -3, -3, -3 }, float3 { 3, 3, 3 }));
-    auto mesher = occ::Mesher(grid, string("E:\\test-sphere.stp"));
-    /*
+    //occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::box(float3 { -3, -3, -3 }, float3 { 3, 3, 3 }));
+    //auto mesher = occ::Mesher(grid, string("E:\\test-sphere.stp"));
 
     auto proj = cst::Project(string("E:\\Projects\\cst-demo\\dipole-test.cst"), string("2019"));
+    ASSERT(proj.ports.size() == 1, "Only one port supported");
+    ASSERT(proj.dt > 0, "cannot get dt from project");
+
     auto grid = proj.GetHexGrid();
     auto eps = proj.GetMatrix(100).data(), mue = proj.GetMatrix(101).data();
     auto mats = fit::Matrix(grid, eps, mue);
-
-    ASSERT(proj.ports.size() == 1, "Only one port supported");
     auto pos = proj.ports[0];
     auto port = fit::Port(grid, pos.src, pos.dst);
 
     // TODO
-    float t = 0, steps = 1e5;
     auto solver = fit::Solver(mats, proj.dt, vector<fit::Port>({ port }));
 
-    vector<float> sigx(steps), sigy(steps);
+    int steps = 3074;
+    vector<float> sigt(steps), sigs(steps), sigy(steps);
+
+    double t = 0;
     for (int c = 0; c < steps; c ++, t += proj.dt) {
-        auto s = utils::interp1(proj.excitation.x, proj.excitation.y, t);
-        sigx[c] = t;
-        sigy[c] = solver.Step(s);
+        sigt[c] = t;
+        sigs[c] = utils::interp1(proj.excitation.x, proj.excitation.y, t);
     }
 
-    cout << "ok" << endl;
-     */
+    for (int c = 0; c < steps; c ++) {
+        sigy[c] = solver.Step(sigs[c]);
+    }
+
+    for (int c = 0; c < steps; c ++) {
+        if (c % 10 == 0) {
+            cout << sigt[c] << ", " << sigs[c] << ", " << sigy[c] << endl;
+        }
+    }
+
     return 0;
 }

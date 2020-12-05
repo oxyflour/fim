@@ -38,7 +38,7 @@ namespace cst {
         std::vector<double> Get1DResult(std::string tree, int num, int type);
 
         // will be filled by ForkAndExportSettings
-        float dt = 0;
+        float dt = -1;
         std::vector<port_type> ports;
         std::vector<solid_type> solids;
         excitation_type excitation;

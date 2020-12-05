@@ -25,7 +25,7 @@ static auto getCstPath(string &version) {
 }
 
 map<string, float> UNITS = {
-    { "ns", 0 },
+    { "ns", 1e-9 },
 };
 
 void cst::Project::ForkAndExportSettings(string cstPath) {
@@ -43,24 +43,34 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
     _putenv(("CST_PATH=" + path).c_str());
     _putenv(("JSON_PATH=" + json).c_str());
     _putenv("EXPORT_SOLIDS=TRUE");
-    _putenv("BUILD_MATRIX=TRUE");
-    auto code = system(cmd.c_str());
-    ASSERT(code == 0, "Parse CST Project failed: " + cmd + ", log " + log);
 
     auto projPath = regex_replace(path, regex("\\.cst$"), "");
     auto logPath = filesystem::path(projPath) / "Result" / "Model.log";
+    if (!filesystem::exists(logPath)) {
+        _putenv("BUILD_MATRIX=TRUE");
+    }
+
+    auto code = system(cmd.c_str());
+    ASSERT(code == 0, "Parse CST Project failed: " + cmd + ", log " + log);
+
     if (filesystem::exists(logPath)) {
-        auto log = utils::readFile(logPath.u8string());
+        ifstream input(logPath);
+        string line;
+
+        regex re("\\s*without subcycles:\\s+(\\S+) (\\w+).*");
         smatch dtMatch;
-        regex_match(log, dtMatch, regex("without subcycles:\\s+(\\S+) (\\w+)"));
-        if (dtMatch.size()) {
-            auto unit = dtMatch[2];
-            if (UNITS.count(unit) > 0) {
-                dt = stof(dtMatch[1]) * UNITS[unit];
-            } else {
-                cerr << "WARN: unknown unit '" << unit << "'" << endl;
+        while (getline(input, line)) {
+            if (regex_match(line, dtMatch, re)) {
+                auto unit = dtMatch[2];
+                if (UNITS.count(unit) > 0) {
+                    dt = stof(dtMatch[1]) * UNITS[unit];
+                } else {
+                    cerr << "WARN: unknown unit '" << unit << "' in " << logPath << endl;
+                }
             }
-        } else {
+        }
+        input.close();
+        if (dt < 0) {
             cerr << "WARN: cannot get dt from '" << logPath << "'" << endl;
         }
     }
@@ -77,6 +87,10 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
             material = item["material"].get<string>();
         solids.push_back(solid_type { name, material });
     }
+    auto jUnits = meta["units"];
+    units.geometry = jUnits["geometry"].get<float>();
+    units.time = jUnits["time"].get<float>();
+    units.frequency = jUnits["frequency"].get<float>();
 
     ifstream input(json + ".excitation.txt");
     string header;
@@ -84,15 +98,10 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
     getline(input, header);
     float x, y;
     while (input >> x >> y) {
-        excitation.x.push_back(x);
+        excitation.x.push_back(x * units.time);
         excitation.y.push_back(y);
     }
     input.close();
-
-    auto jUnits = meta["units"];
-    units.geometry = jUnits["geometry"].get<float>();
-    units.time = jUnits["time"].get<float>();
-    units.frequency = jUnits["frequency"].get<float>();
 
     filesystem::remove_all(tmp);
 }
