@@ -105,12 +105,41 @@ static auto getSurfaceProps(const TopoDS_Shape &shape) {
 
 Mesher::Mesher(Grid &grid, string &file, float unit) {
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
+
     nx = xs.size(); ny = ys.size(); nz = zs.size();
     for (int i = 0; i < nx; i ++) xs[i] /= unit;
     for (int i = 0; i < ny; i ++) ys[i] /= unit;
     for (int i = 0; i < nz; i ++) zs[i] /= unit;
+
     shape = Step::load(file);
-    MeshX();
+    auto bound = Shape::bound(shape);
+    xmin = bound.xmin; ymin = bound.ymin; zmin = bound.zmin;
+    xmax = bound.xmax; ymax = bound.ymax; zmax = bound.zmax;
+
+    faceBounds = utils::map(Shape::find(shape, TopAbs_FACE), [](const TopoDS_Shape &shape){
+        return shape_bounds{ shape, Shape::bound(shape) };
+    });
+
+    auto nxyz = nx * ny * nz;
+    sx.resize(nxyz); std::fill(sx.begin(), sx.end(), 0);
+    sy.resize(nxyz); std::fill(sy.begin(), sy.end(), 0);
+    sz.resize(nxyz); std::fill(sz.begin(), sz.end(), 0);
+    lx.resize(nxyz); std::fill(lx.begin(), lx.end(), 0);
+    ly.resize(nxyz); std::fill(ly.begin(), ly.end(), 0);
+    lz.resize(nxyz); std::fill(lz.begin(), lz.end(), 0);
+
+    //MeshX();
+    MeshY();
+    //MeshZ();
+
+    vector<TopoDS_Shape> shapes;
+    for (auto pair : msx) shapes.push_back(pair.second);
+    for (auto pair : msy) shapes.push_back(pair.second);
+    for (auto pair : msz) shapes.push_back(pair.second);
+    for (auto pair : mlx) shapes.push_back(pair.second);
+    for (auto pair : mly) shapes.push_back(pair.second);
+    for (auto pair : mlz) shapes.push_back(pair.second);
+    Step::save(string("E:\\out.stp"), Builder::component(shapes));
 }
 
 template <typename T> auto intersects(T a0, T a1, T b0, T b1, T tol = 1e-3) {
@@ -140,26 +169,30 @@ TopoDS_Shape Builder::line(float3 &from, float3 &to) {
     return BRepBuilderAPI_MakeEdge(gp_Pnt(from.x, from.y, from.z), gp_Pnt(to.x, to.y, to.z)).Shape();
 }
 
-typedef struct shape_bounds {
-    const TopoDS_Shape shape;
-    bound_type bound;
-} shape_bounds;
-
-void calcWireNormal(shape_bounds &box, vector<shape_bounds> &faces, int dir) {
+void calcWireNormal(bound_type &bound, vector<shape_bounds> &faces, int dir) {
+    auto xmin = bound.xmin, ymin = bound.ymin, zmin = bound.zmin,
+        xmax = bound.xmax, ymax = bound.ymax, zmax = bound.zmax;
+    auto box = Builder::box(float3(xmin, ymin, zmin), float3(xmax, ymax, zmax));
     for (auto &fv : faces) {
-        if (fv.bound.intersects(box.bound)) {
-            for (auto &fc : Shape::find(Bool::common(fv.shape, box.shape), TopAbs_FACE)) {
+        if (fv.bound.intersects(bound)) {
+            for (auto &fc : Shape::find(Bool::common(fv.shape, box), TopAbs_FACE)) {
                 auto face = TopoDS::Face(fc);
                 for (auto &ed : Shape::find(fc, TopAbs_EDGE)) {
                     auto bound = Shape::bound(ed);
                     if ((dir == 0 &&
-                            abs(bound.xmin - box.bound.xmin) < (box.bound.xmax - box.bound.xmin) * 1e-3 &&
-                            abs(bound.xmax - box.bound.xmin) < (box.bound.xmax - box.bound.xmin) * 1e-3)) {
+                            abs(bound.xmin - xmin) < (xmax - xmin) * 1e-3 &&
+                            abs(bound.xmax - xmin) < (xmax - xmin) * 1e-3) ||
+                        (dir == 1 &&
+                            abs(bound.ymin - ymin) < (ymax - ymin) * 1e-3 &&
+                            abs(bound.ymax - ymin) < (ymax - ymin) * 1e-3) ||
+                        (dir == 2 &&
+                            abs(bound.zmin - zmin) < (zmax - zmin) * 1e-3 &&
+                            abs(bound.zmax - zmin) < (zmax - zmin) * 1e-3)) {
                         auto edge = TopoDS::Edge(ed);
                         gp_Dir dir;
                         BOPTools_AlgoTools3D::GetNormalToFaceOnEdge(edge, face, 0.5, dir);
-                        printf("%f, %f, %f / %f, %f, %f\n",
-                            box.bound.xmin, box.bound.ymin, box.bound.zmin, dir.X(), dir.Y(), dir.Z());
+                        // TODO: output
+                        //printf("%f, %f, %f / %f, %f, %f\n", xmin, ymin, zmin, dir.X(), dir.Y(), dir.Z());
                     }
                 }
             }
@@ -168,84 +201,148 @@ void calcWireNormal(shape_bounds &box, vector<shape_bounds> &faces, int dir) {
 }
 
 void Mesher::MeshX() {
-    auto areaArr = vector<float>(nx * ny * nz);
-    auto lengthArr = vector<float>(nx * ny * nz);
+    auto &areaArr = sx, &lengthArr = ly;
+    auto &surfMap = msx, &edgeMap = mly;
 
-    auto surfMap = map<int, TopoDS_Shape>();
-    auto edgeMap = map<int, TopoDS_Shape>();
-
-    auto faceBounds = utils::map(Shape::find(shape, TopAbs_FACE), [](const TopoDS_Shape &shape){
-        return shape_bounds{ shape, Shape::bound(shape) };
-    });
-
-    auto b = Shape::bound(shape);
-    auto shapes = vector<TopoDS_Shape>();
     for (int i = 0; i < nx - 1; i ++) {
         auto x0 = xs[i], x1 = xs[i + 1], dx = x1 - x0;
-        if (!intersects(x0, x1, b.xmin, b.xmax)) {
-            continue;
-        }
+        if (!intersects(x0, x1, xmin, xmax)) continue;
 
-        auto plane = Builder::plane(float3::create(x0, 0, 0), float3::create(1, 0, 0));
-        auto c1 = Bool::common(plane, shape);
-        if (BOPTools_AlgoTools3D::IsEmptyShape(c1)) {
-            continue;
-        }
+        auto cyz = Bool::common(shape, Builder::plane(float3(x0, 0, 0), float3(1, 0, 0)));
+        if (BOPTools_AlgoTools3D::IsEmptyShape(cyz)) continue;
 
-        auto b1 = Shape::bound(c1);
+        auto byz = Shape::bound(cyz);
         for (int j = 0; j < ny - 1; j ++) {
             auto y0 = ys[j], y1 = ys[j + 1], dy = y1 - y0;
-            if (!intersects(y0, y1, b1.ymin, b1.ymax)) {
-                continue;
-            }
+            if (!intersects(y0, y1, byz.ymin, byz.ymax)) continue;
 
-            auto box = Builder::box(float3::create(x0, y0, b.zmin), float3::create(x1, y1, b.zmax));
-            auto c2 = Bool::common(c1, box);
-            if (BOPTools_AlgoTools3D::IsEmptyShape(c2)) {
-                continue;
-            }
+            auto cy = Bool::common(cyz, Builder::box(float3(x0, y0, zmin), float3(x1, y1, zmax)));
+            if (BOPTools_AlgoTools3D::IsEmptyShape(cy)) continue;
 
-            auto b2 = Shape::bound(c2);
+            auto by = Shape::bound(cy);
             for (int k = 0; k < nz - 1; k ++) {
                 auto z0 = zs[k], z1 = zs[k + 1], dz = z1 - z0;
-                if (!intersects(z0, z1, b2.zmin, b2.zmax)) {
-                    continue;
-                }
-
-                auto calcWire = false;
+                if (!intersects(z0, z1, by.zmin, by.zmax)) continue;
 
                 auto idx = i + j * nx + k * nx * ny;
-                auto box = Builder::box(float3::create(x0, y0, z0), float3::create(x1, y1, z1));
-                auto surface = Bool::common(c2, box);
-                auto area = areaArr[idx] = getSurfaceProps(surface).Mass();
-                if (area > 0.001 * dx * dy && area < 0.999 * dx * dy) {
-                    surfMap[idx] = surface;
-                    calcWire = true;
+                auto calcNorm = false;
+
+                auto surf = Bool::common(cy, Builder::box(float3(x0, y0, z0), float3(x1, y1, z1)));
+                auto area = areaArr[idx] = getSurfaceProps(surf).Mass() / dy / dz;
+                if (area > 0.001 && area < 0.999) {
+                    surfMap[idx] = surf;
+                    calcNorm = true;
                 }
 
-                auto line = Builder::line(float3::create(x0, y0, z0), float3::create(x0, y1, z0));
-                auto edge = Bool::common(c2, line);
-                auto length = lengthArr[idx] = getLinearProps(edge).Mass();
-                if (length > 0.01 * dy && length < 0.99 * dy) {
+                auto edge = Bool::common(cy, Builder::line(float3(x0, y0, z0), float3(x0, y1, z0)));
+                auto length = lengthArr[idx] = getLinearProps(edge).Mass() / dy;
+                if (length > 0.01 && length < 0.99) {
                     edgeMap[idx] = edge;
-                    calcWire = true;
+                    calcNorm = true;
                 }
 
-                if (calcWire) {
-                    auto bound = bound_type { x0, y0, z0, x1, y1, z1 };
-                    auto boxBound = shape_bounds { box, bound };
-                    calcWireNormal(boxBound, faceBounds, 0);
+                if (calcNorm) {
+                    calcWireNormal(bound_type { x0, y0, z0, x1, y1, z1 }, faceBounds, 0);
                 }
             }
         }
     }
-    /*
-    for (auto pair : edgeMap) {
-        shapes.push_back(pair.second);
+}
+
+void Mesher::MeshY() {
+    auto &areaArr = sy, &lengthArr = lz;
+    auto &surfMap = msy, &edgeMap = mlz;
+
+    for (int j = 0; j < ny - 1; j ++) {
+        auto y0 = ys[j], y1 = ys[j + 1], dy = y1 - y0;
+        if (!intersects(y0, y1, ymin, ymax)) continue;
+
+        auto czx = Bool::common(shape, Builder::plane(float3(0, y0, 0), float3(0, 1, 0)));
+        if (BOPTools_AlgoTools3D::IsEmptyShape(czx)) continue;
+
+        auto bzx = Shape::bound(czx);
+        for (int k = 0; k < nz - 1; k ++) {
+            auto z0 = zs[k], z1 = zs[k + 1], dz = z1 - z0;
+            if (!intersects(z0, z1, bzx.zmin, bzx.zmax)) continue;
+
+            auto cz = Bool::common(czx, Builder::box(float3(xmin, y0, z0), float3(xmax, y1, z1)));
+            if (BOPTools_AlgoTools3D::IsEmptyShape(cz)) continue;
+
+            auto bz = Shape::bound(cz);
+            for (int i = 0; i < nx - 1; i ++) {
+                auto x0 = xs[i], x1 = xs[i + 1], dx = x1 - x0;
+                if (!intersects(x0, x1, bz.xmin, bz.xmax)) continue;
+
+                auto idx = i + j * nx + k * nx * ny;
+                auto calcNorm = false;
+
+                auto surf = Bool::common(cz, Builder::box(float3(x0, y0, z0), float3(x1, y1, z1)));
+                auto area = areaArr[idx] = getSurfaceProps(surf).Mass() / dz / dx;
+                if (area > 0.001 && area < 0.999) {
+                    surfMap[idx] = surf;
+                    calcNorm = true;
+                }
+
+                auto edge = Bool::common(cz, Builder::line(float3(x0, y0, z0), float3(x0, y0, z1)));
+                auto length = lengthArr[idx] = getLinearProps(edge).Mass() / dz;
+                if (length > 0.01 && length < 0.99) {
+                    edgeMap[idx] = edge;
+                    calcNorm = true;
+                }
+
+                if (calcNorm) {
+                    calcWireNormal(bound_type { x0, y0, z0, x1, y1, z1 }, faceBounds, 1);
+                }
+            }
+        }
     }
-    for (auto pair : surfMap) {
-        shapes.push_back(pair.second);
+}
+
+void Mesher::MeshZ() {
+    auto &areaArr = sz, &lengthArr = lx;
+    auto &surfMap = msz, &edgeMap = mlx;
+
+    for (int k = 0; k < nz - 1; k ++) {
+        auto z0 = zs[k], z1 = zs[k + 1], dz = z1 - z0;
+        if (!intersects(z0, z1, zmin, zmax)) continue;
+
+        auto cxy = Bool::common(shape, Builder::plane(float3(0, 0, z0), float3(0, 0, 1)));
+        if (BOPTools_AlgoTools3D::IsEmptyShape(cxy)) continue;
+
+        auto bxy = Shape::bound(cxy);
+        for (int i = 0; i < nx - 1; i ++) {
+            auto x0 = xs[i], x1 = xs[i + 1], dx = x1 - x0;
+            if (!intersects(x0, x1, bxy.xmin, bxy.xmax)) continue;
+
+            auto cx = Bool::common(cxy, Builder::box(float3(x0, ymin, z0), float3(x1, ymax, z1)));
+            if (BOPTools_AlgoTools3D::IsEmptyShape(cx)) continue;
+
+            auto bx = Shape::bound(cx);
+            for (int j = 0; j < ny - 1; j ++) {
+                auto y0 = ys[j], y1 = ys[j + 1], dy = y1 - y0;
+                if (!intersects(y0, y1, bx.ymin, bx.ymax)) continue;
+
+                auto idx = i + j * nx + k * nx * ny;
+                auto calcNorm = false;
+
+                auto surf = Bool::common(cx, Builder::box(float3(x0, y0, z0), float3(x1, y1, z1)));
+                auto area = areaArr[idx] = getSurfaceProps(surf).Mass() / dx / dy;
+                if (area > 0.001 && area < 0.999) {
+                    surfMap[idx] = surf;
+                    calcNorm = true;
+                }
+
+                auto edge = Bool::common(cx, Builder::line(float3(x0, y0, z0), float3(x1, y0, z0)));
+                auto length = lengthArr[idx] = getLinearProps(edge).Mass() / dx;
+                if (length > 0.01 && length < 0.99) {
+                    edgeMap[idx] = edge;
+                    calcNorm = true;
+                }
+
+                if (calcNorm) {
+                    calcWireNormal(bound_type { x0, y0, z0, x1, y1, z1 }, faceBounds, 2);
+                }
+            }
+        }
     }
-     */
-    Step::save(string("E:\\out.stp"), Builder::component(shapes));
 }

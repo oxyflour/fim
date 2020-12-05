@@ -1,5 +1,6 @@
 #include "grid.h"
 
+#include <map>
 #include <TopoDS_Shape.hxx>
 
 #ifndef OCC_H
@@ -10,6 +11,11 @@ namespace occ {
         double xmin, ymin, zmin, xmax, ymax, zmax;
         bool intersects(bound_type &bound, double tol);
     } bound_type;
+
+    typedef struct shape_bounds {
+        const TopoDS_Shape shape;
+        bound_type bound;
+    } shape_bounds;
 
     typedef struct Step {
         static TopoDS_Shape load(std::string &file);
@@ -38,9 +44,14 @@ namespace occ {
     private:
         int nx, ny, nz;
         std::vector<double> xs, ys, zs;
-        float unit;
+        std::vector<float> sx, sy, sz, lx, ly, lz;
+        std::map<int, TopoDS_Shape> msx, msy, msz, mlx, mly, mlz;
         TopoDS_Shape shape;
+        double xmin, ymin, zmin, xmax, ymax, zmax;
+        std::vector<shape_bounds> faceBounds;
         void MeshX();
+        void MeshY();
+        void MeshZ();
     } Mesher;
 };
 

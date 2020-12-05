@@ -6,7 +6,7 @@
 #include <filesystem>
 using namespace std;
 
-fit::Port::Port(Grid &grid, float3 src, float3 dst, float epsi) {
+fit::Port::Port(Grid &grid, float3 &src, float3 &dst, float epsi) {
     this->src = src;
     this->dst = dst;
     pos = grid.ParsePort(src, dst, epsi);

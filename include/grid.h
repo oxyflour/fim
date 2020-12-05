@@ -5,9 +5,8 @@
 
 typedef struct float3 {
     float x, y, z;
-    static auto create(float x, float y, float z) {
-        return float3 { x, y, z };
-    }
+    float3() { }
+    template <typename A, typename B, typename C> float3(A x, B y, C z) : x(x), y(y), z(z) { }
     float3 operator- (const float3& first);
     float length();
 } float3;
