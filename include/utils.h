@@ -39,6 +39,20 @@ namespace utils {
 
     float interp1(const std::vector<float> &xs, const std::vector<float> &ys, const float x);
 
+    template <typename T> std::vector<T> range(T from, T to, T delta) {
+        auto ret = std::vector<T>();
+        for (auto val = from; val < to; val += delta) {
+            ret.push_back(val);
+        }
+        return ret;
+    }
+    template <typename T> std::vector<T> range(T from, T to) {
+        return range(from, to, 1);
+    }
+    template <typename T> std::vector<T> range(T to) {
+        return range(0, to, 1);
+    }
+
     typedef struct DLL {
         DLL(std::string path);
         ~DLL();

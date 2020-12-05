@@ -6,9 +6,9 @@
 #include <filesystem>
 using namespace std;
 
-fit::Port::Port(Grid &grid, float3 &src, float3 &dst, float epsi) {
-    this->src = src;
-    this->dst = dst;
+fit::Port::Port(Grid &grid, cst::port_type &port, float epsi) {
+    src = port.src;
+    dst = port.dst;
     pos = grid.ParsePort(src, dst, epsi);
     auto c = pos.size() / 2;
     auto d = pos[c] - pos[c - 1];

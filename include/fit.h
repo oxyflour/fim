@@ -1,6 +1,7 @@
 #include "utils.h"
 #include "grid.h"
 #include "chunk.h"
+#include "cst.h"
 
 #ifndef FIT_H
 #define FIT_H
@@ -11,7 +12,7 @@ namespace fit {
         std::vector<int3> pos;
         int idx;
         int dir;
-        Port(Grid &grid, float3 &src, float3 &dst, float epsi = 1e-6);
+        Port(Grid &grid, cst::port_type &port, float epsi = 1e-6);
     } Port;
 
     typedef struct Matrix {

@@ -9,7 +9,6 @@
 inline void _panic(std::string msg, const char *file, int line)
 {
     auto m = "FATAL: " + msg + " at " + file + ":" + std::to_string(line) + "\n";
-    std::cerr << m;
     throw std::exception(m.c_str());
 }
 
