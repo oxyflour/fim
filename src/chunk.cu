@@ -1,6 +1,8 @@
 #include "utils/cuda_utils.h"
 #include "chunk.h"
 
+#include "stdio.h"
+
 #ifdef __INTELLISENSE__
 #define $nx 1
 #define $ny 1
@@ -28,8 +30,6 @@ public:
     float REx[NXYZ], REy[NXYZ], REz[NXYZ], RHx[NXYZ], RHy[NXYZ], RHz[NXYZ];
     // pml
     float EP1[NXYZ], EP2[NXYZ], HP1[NXYZ], HP2[NXYZ];
-    // port output
-    float sig;
     __device__ __forceinline__ void step_h() {
         register int i, j, k;
         for (auto g = cuIdx(x); g < NXYZ; g += cuDim(x)) {
@@ -41,7 +41,7 @@ public:
             }
         }
     }
-    __device__ __forceinline__ void step_e(float s) {
+    __device__ __forceinline__ void step_e(float s, float *p) {
         register int i, j, k;
         for (auto g = cuIdx(x); g < NXYZ; g += cuDim(x)) {
             get_ijk(g, i, j, k);
@@ -54,13 +54,14 @@ public:
                 Ey[g] = LEy[g] * Ey[g] + REy[g] * (Hz[get_idx(i-1, j, k)] - Hz[g] - Hx[get_idx(i, j, k-1)] + Hx[g] + sy);
                 Ez[g] = LEz[g] * Ez[g] + REz[g] * (Hx[get_idx(i, j-1, k)] - Hx[g] - Hy[get_idx(i-1, j, k)] + Hy[g] + sz);
                 if (g == SG) {
-                    sig = SD == 0 ? Ex[g] : SD == 1 ? Ey[g] : Ez[g];
+                    *p = SD == 0 ? Ex[g] : SD == 1 ? Ey[g] : Ez[g];
                 }
             }
         }
     }
 };
 
+float *sig_$i;
 __device__ Chunk_$i<$nx, $ny, $nz, $sg, $sd> chunk_$i;
 __global__ void kernel_init_$i(float *le, float *re, float *lh, float *rh) {
     constexpr int NXYZ = $nx * $ny * $nz;
@@ -75,8 +76,8 @@ __global__ void kernel_init_$i(float *le, float *re, float *lh, float *rh) {
 __global__ void kernel_step_h_$i() {
     chunk_$i.step_h();
 }
-__global__ void kernel_step_e_$i(float s) {
-    chunk_$i.step_e(s);
+__global__ void kernel_step_e_$i(float s, float *p) {
+    chunk_$i.step_e(s, p);
 }
 
 extern "C" DLL_EXPORT int init_$i(float *le, float *re, float *lh, float *rh) {
@@ -85,14 +86,15 @@ extern "C" DLL_EXPORT int init_$i(float *le, float *re, float *lh, float *rh) {
         to_device(le, NVAR), to_device(re, NVAR),
         to_device(lh, NVAR), to_device(rh, NVAR));
     CU_ASSERT(cudaGetLastError());
+    sig_$i = malloc_device<float>(1);
     return 0;
 }
 
 extern "C" DLL_EXPORT float step_$i(float s) {
     kernel_step_h_$i CU_DIM(2048, 256) ();
-    kernel_step_e_$i CU_DIM(2048, 256) (s);
+    kernel_step_e_$i CU_DIM(2048, 256) (s, sig_$i);
     CU_ASSERT(cudaGetLastError());
-    CU_ASSERT(cudaMemcpy(&s, &chunk_$i.sig, sizeof(float), cudaMemcpyDefault));
+    CU_ASSERT(cudaMemcpy(&s, sig_$i, sizeof(float), cudaMemcpyDefault));
     return s;
 }
 

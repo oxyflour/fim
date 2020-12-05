@@ -47,8 +47,8 @@ void fit::Coefficient::UpdateFromPort(fit::Port &port) {
         auto d = pos[i + 1] - pos[i];
         auto g = grid->GetFlatIndex(pos[i], d.x ? 0 : d.y ? 1 : 2);
         if (i != c) {
-            le[g] = 1;
-            re[g] = 0;
+            //le[g] = 1;
+            //re[g] = 0;
         }
     }
 }

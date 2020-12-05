@@ -12,7 +12,7 @@ template <typename T> auto range(T from, T to, T delta) {
     return ret;
 }
 
-int main() {
+int wmain() {
     //auto grid = Grid { range<double>(-5, 5, 1), range<double>(-5, 5, 1), range<double>(-5, 5, 1) };
     //occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::sphere(float3 { 0, 0, 0 }, 3.5));
     //occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::box(float3 { -3, -3, -3 }, float3 { 3, 3, 3 }));
@@ -31,7 +31,7 @@ int main() {
     // TODO
     auto solver = fit::Solver(mats, proj.dt, vector<fit::Port>({ port }));
 
-    int steps = 3074;
+    int steps = 1074;
     vector<float> sigt(steps), sigs(steps), sigy(steps);
 
     double t = 0;
@@ -39,11 +39,9 @@ int main() {
         sigt[c] = t;
         sigs[c] = utils::interp1(proj.excitation.x, proj.excitation.y, t);
     }
-
     for (int c = 0; c < steps; c ++) {
         sigy[c] = solver.Step(sigs[c]);
     }
-
     for (int c = 0; c < steps; c ++) {
         if (c % 10 == 0) {
             cout << sigt[c] << ", " << sigs[c] << ", " << sigy[c] << endl;
@@ -51,4 +49,13 @@ int main() {
     }
 
     return 0;
+}
+
+int main() {
+    try {
+        return wmain();
+    } catch (exception &e) {
+        cerr << e.what() << endl;
+        return -1;
+    }
 }

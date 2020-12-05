@@ -29,41 +29,19 @@ download_extract(
   https://prebuilt.oss-cn-shanghai.aliyuncs.com/occt-7.4.zip
   occt)
 
-# https://gist.github.com/amir-saniyan/de99cee82fa9d8d615bb69f3f53b6004
-function(embed_resource resource_file_name source_file_name variable_name)
-  file(READ ${resource_file_name} hex_content HEX)
-  string(REPEAT "[0-9a-f]" 32 column_pattern)
-  string(REGEX REPLACE "(${column_pattern})" "\\1\n" content "${hex_content}")
-  string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1, " content "${content}")
-  string(REGEX REPLACE ", $" "" content "${content}")
-  set(array_definition "static const char ${variable_name}[] =\n{\n${content}\n};")
-  set(source "// Auto generated file.\n${array_definition}\n")
-  file(APPEND "${source_file_name}" "${source}")
-endfunction()
-file(WRITE "include/generated/cst_run_bas.h" "")
-embed_resource("tool/run.bas" "include/generated/cst_run_bas.h" "SRC_CST_RUN_BAS")
+add_custom_command(
+  OUTPUT include_generated
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/tool/gen.cmake
+)
 
-# https://stackoverflow.com/a/27206982
-set(generated_inc "include/generated/inc_chunk_cu.h")
-file(WRITE "${generated_inc}" "")
-embed_resource("src/chunk.cu" "${generated_inc}" "SRC_CHUNK_CU")
-file(GLOB inc_list include/*.h include/utils/*.h)
-set(inc_file_list "")
-foreach(inc ${inc_list})
-  string(REGEX MATCH "include/(.+)$" filename ${inc})
-  string(REGEX REPLACE "\\.| |-" "_" shortname "${filename}")
-  string(REPLACE "/" "_" shortname "${shortname}")
-  string(TOUPPER ${shortname} uppername)
-  set(inc_file_list "${inc_file_list}\"${filename}\",INC_${uppername},\n")
-  embed_resource(${inc} "${generated_inc}" "INC_${uppername}")
-endforeach()
-set(inc_file_list "static const char* INC_FILES[] = {\n${inc_file_list}\"\"\n};")
-file(APPEND "${generated_inc}" "${inc_file_list}")
+add_custom_target(
+  include_generated
+  DEPENDS src/chunk.cu include/*.h include/utils/*.h)
 
 link_directories(${CMAKE_SOURCE_DIR}/build/occt/occt-7.4/lib)
 include_directories(${CMAKE_JS_INC} "${CMAKE_SOURCE_DIR}/include" "${CUDA_TOOLKIT_ROOT_DIR}/include")
 file(GLOB SOURCE_FILES "src/*.cc")
-add_executable(${PROJECT_NAME} ${SOURCE_FILES})
+add_executable(${PROJECT_NAME} ${SOURCE_FILES} include_generated)
 
 target_include_directories(${PROJECT_NAME} PRIVATE build/occt/occt-7.4/include)
 IF (WIN32)
