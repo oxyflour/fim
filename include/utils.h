@@ -47,6 +47,15 @@ namespace utils {
         std::map<std::string, FARPROC> procs;
         lib_func __stdcall getProc(std::string name);
     } DLL;
+
+    // well, it's impossible to declare auto return type of a function now
+    template <class T, class F> auto map(std::vector<T> &arr, F fun) {
+        auto ret = std::vector<typename std::result_of<F(const typename T&)>::type>(arr.size());
+        for (const auto &item : arr) {
+            ret.push_back(fun(item));
+        }
+        return ret;
+    };
 }
 
 #endif
