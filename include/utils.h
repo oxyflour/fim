@@ -28,6 +28,17 @@ typedef void* lib_type;
 typedef void* lib_func;
 #endif
 
+// https://github.com/lava/matplotlib-cpp
+#define WITHOUT_NUMPY
+// https://bugs.python.org/issue38728
+#ifdef _WIN32 && _DEBUG
+#undef _DEBUG
+#include "matplotlibcpp.h"
+#define _DEBUG
+#else
+#include "matplotlibcpp.h"
+#endif
+
 namespace utils {
     std::string random(const int len);
 
