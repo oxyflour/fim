@@ -12,6 +12,7 @@ namespace fit {
         std::vector<int3> pos;
         int idx;
         int dir;
+        float imp = 50;
         Port(Grid &grid, cst::port_type &port, float epsi = 1e-6);
     } Port;
 

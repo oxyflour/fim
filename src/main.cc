@@ -16,7 +16,7 @@ auto solve() {
     ASSERT(proj.dt > 0, "cannot get dt from project");
 
     auto grid = proj.GetHexGrid();
-    auto eps = proj.GetMatrix(100).data(), mue = proj.GetMatrix(101).data();
+    auto eps = proj.GetMatrix(100), mue = proj.GetMatrix(101);
     auto mats = fit::Matrix(grid, eps, mue);
     auto port = fit::Port(grid, proj.ports[0]);
     auto solver = fit::Solver(mats, proj.dt, vector<fit::Port>({ port }));

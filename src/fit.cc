@@ -49,6 +49,10 @@ void fit::Coefficient::UpdateFromPort(fit::Port &port) {
         if (i != c) {
             le[g] = 1;
             re[g] = 0;
+        } else {
+            auto scale = 1 + re[g] / port.imp;
+            le[g] /= scale;
+            re[g] /= scale;
         }
     }
 }

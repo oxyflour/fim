@@ -34,8 +34,8 @@ namespace cst {
         ~Project();
 
         Grid GetHexGrid();
-        std::vector<float> GetMatrix(int mat);
-        std::vector<double> Get1DResult(std::string tree, int num, int type);
+        float *GetMatrix(int mat);
+        double *Get1DResult(std::string tree, int num, int type);
 
         // will be filled by MakeCacheAndLoadSettings
         float dt = -1;

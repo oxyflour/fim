@@ -91,7 +91,7 @@ extern "C" DLL_EXPORT int init_$i(float *le, float *re, float *lh, float *rh) {
     kernel_init_$i CU_DIM(2048, 256) (
         to_device(le, NVAR), to_device(re, NVAR),
         to_device(lh, NVAR), to_device(rh, NVAR));
-    CU_ASSERT(cudaGetLastError());
+    CU_ASSERT(cudaDeviceSynchronize());
     sig_$i = malloc_device<float>(1);
     return 0;
 }

@@ -182,7 +182,7 @@ Grid cst::Project::GetHexGrid() {
     return Grid { xs, ys, zs };
 }
 
-vector<float> cst::Project::GetMatrix(int mat) {
+float *cst::Project::GetMatrix(int mat) {
     ASSERT(dll != NULL, "project " + path + " already destroyed");
 
     int nxyz[3] = { 0 };
@@ -191,31 +191,31 @@ vector<float> cst::Project::GetMatrix(int mat) {
     ASSERT(ret == 0, "GetHexMeshInfo Error: " + to_string(ret));
 
     int nx = nxyz[0], ny = nxyz[1], nz = nxyz[2], sz = nx * ny * nz * 3;
-    auto array = vector<float>(sz);
+    auto array = new float[sz];
     auto getMaterialMatrix = (CST_GetMaterialMatrixHexMesh_PTR) dll->getProc("CST_GetMaterialMatrixHexMesh");
-    ret = getMaterialMatrix ? getMaterialMatrix(&handle, mat, array.data()) : -1;
+    ret = getMaterialMatrix ? getMaterialMatrix(&handle, mat, array) : -1;
     ASSERT(ret == 0, "GetMaterialMatrix Error: " + to_string(ret));
 
     if (mat == 101) {
         // reorder for mue
-        auto arr = vector<float>(sz);
+        auto clone = new float[sz];
         int nxy = nx * ny, nxyz = nxy * nz;
         for (int i = 0; i < nx; i ++) {
             for (int j = 0; j < ny; j ++) {
                 for (int k = 0; k < nz; k ++) {
-                    arr[i + j * nx + k * nxy         ] = array[((i+1) % nx) + j * nx + k * nxy         ];
-                    arr[i + j * nx + k * nxy + nxyz  ] = array[i + ((j+1) % ny) * nx + k * nxy + nxyz  ];
-                    arr[i + j * nx + k * nxy + nxyz*2] = array[i + j * nx + ((k+1) % nz) * nxy + nxyz*2];
+                    clone[i + j * nx + k * nxy         ] = array[((i+1) % nx) + j * nx + k * nxy         ];
+                    clone[i + j * nx + k * nxy + nxyz  ] = array[i + ((j+1) % ny) * nx + k * nxy + nxyz  ];
+                    clone[i + j * nx + k * nxy + nxyz*2] = array[i + j * nx + ((k+1) % nz) * nxy + nxyz*2];
                 }
             }
         }
-        return arr;
+        return clone;
     } else {
         return array;
     }
 }
 
-vector<double> cst::Project::Get1DResult(string tree, int num, int type) {
+double *cst::Project::Get1DResult(string tree, int num, int type) {
     ASSERT(dll != NULL, "project " + path + " already destroyed");
 
     auto getResultSize = (CST_Get1DResultSize_PTR) dll->getProc("CST_Get1DResultSize");
@@ -226,8 +226,8 @@ vector<double> cst::Project::Get1DResult(string tree, int num, int type) {
     auto getResultData = type == 0 ?
         (CST_Get1DRealDataAbszissa_PTR) dll->getProc("CST_Get1DRealDataAbszissa") :
         (CST_Get1DRealDataOrdinate_PTR) dll->getProc("CST_Get1DRealDataOrdinate");
-    auto array = vector<double>(size);
-    ret = getResultData ? getResultData(&handle, tree.c_str(), num, array.data()) : -1;
+    auto array = new double[size];
+    ret = getResultData ? getResultData(&handle, tree.c_str(), num, array) : -1;
     ASSERT(ret == 0, "Get1DResultData Error: " + to_string(ret));
 
     return array;
