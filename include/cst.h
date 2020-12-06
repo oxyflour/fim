@@ -30,14 +30,14 @@ namespace cst {
     } units_type;
 
     typedef struct Project {
-        Project(std::string &path, std::string &version);
+        Project(std::string &path, std::string &version, bool keepCache = false);
         ~Project();
 
         Grid GetHexGrid();
         std::vector<float> GetMatrix(int mat);
         std::vector<double> Get1DResult(std::string tree, int num, int type);
 
-        // will be filled by ForkAndExportSettings
+        // will be filled by MakeCacheAndLoadSettings
         float dt = -1;
         std::vector<port_type> ports;
         std::vector<solid_type> solids;
@@ -50,7 +50,9 @@ private:
         utils::DLL *dll;
         CSTProjHandle handle;
 
-        void ForkAndExportSettings(std::string cst);
+        bool keepCache = false;
+        std::string cachePath;
+        std::string MakeCacheAndLoadSettings(std::string cst);
     } Project;
 }
 

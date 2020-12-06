@@ -2,6 +2,8 @@
 #include "utils.h"
 #include "generated/cst_run_bas.h"
 
+#include "picosha2.h"
+
 #include <regex>
 #include <fstream>
 #include <filesystem>
@@ -11,7 +13,7 @@ using namespace std;
 using json = nlohmann::json;
 
 static map<string, utils::DLL*> dllCache;
-static auto getCstPath(string &version) {
+static auto getCstDir(string &version) {
     HKEY handle;
     auto key = wstring(L"SOFTWARE\\Wow6432Node\\CST AG\\CST DESIGN ENVIRONMENT\\") + utils::utf8ToWstring(version);
     auto ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, key.c_str(), 0, KEY_READ, &handle);
@@ -23,59 +25,77 @@ static auto getCstPath(string &version) {
     ASSERT(ret == ERROR_SUCCESS, "RegQuery INSTALLPATH Error: " + to_string(ret));
     return utils::wstringToUtf8(buf);
 }
+static auto getCstExe(string &cstDir) {
+    return cstDir + "AMD64\\CST DESIGN ENVIRONMENT_AMD64.exe";
+}
+static auto getCstDll(string &cstDir) {
+    wchar_t cwd[1024] = { 0 };
+    DWORD len = sizeof(cwd) / sizeof(wchar_t);
+    GetCurrentDirectoryW(len, cwd);
+
+    auto dir = cstDir + "AMD64";
+    SetCurrentDirectoryW(utils::utf8ToWstring(dir).c_str());
+    auto dll = new utils::DLL(dir + "\\CSTResultReader_AMD64.dll");
+    SetCurrentDirectoryW(cwd);
+
+    return dll;
+}
 
 map<string, float> UNITS = {
     { "ns", 1e-9 },
 };
 
-void cst::Project::ForkAndExportSettings(string cstPath) {
-    auto tmp = filesystem::temp_directory_path() / ("cst-parse-" + utils::random(8));
-    filesystem::create_directories(tmp);
+static auto hashOfFile(string &path) {
+    auto cstFile = ifstream(path, ios::binary);
+    vector<unsigned char> hash(picosha2::k_digest_size);
+    picosha2::hash256(cstFile, hash.begin(), hash.end());
+    cstFile.close();
+    return picosha2::hash256_hex_string(hash);
+}
 
-    auto exe = cstPath + "AMD64\\CST DESIGN ENVIRONMENT_AMD64.exe",
-        bas = (tmp / "run.bas").u8string(),
-        log = (tmp / "run.log").u8string(),
-        json = (tmp / "run.json").u8string(),
-        // https://stackoverflow.com/questions/9964865/c-system-not-working-when-there-are-spaces-in-two-different-parameters
-        cmd = "\"\"" + exe + "\" -i -m \"" + bas + "\" > " + log + " 2>&1\"";
-    utils::writeFile(bas, SRC_CST_RUN_BAS);
+string cst::Project::MakeCacheAndLoadSettings(string cstDir) {
+    auto fileHash = hashOfFile(path).substr(0, 16) + "-" + picosha2::hash256_hex_string(path).substr(0, 16);
 
-    _putenv(("CST_PATH=" + path).c_str());
-    _putenv(("JSON_PATH=" + json).c_str());
-    _putenv("EXPORT_SOLIDS=TRUE");
+    auto tmpPath = filesystem::temp_directory_path() / ("cst-parser-" + fileHash),
+        basPath = tmpPath / "run.bas",
+        logPath = tmpPath / "run.log",
+        jsonPath = tmpPath / "run.json",
+        cstPath = tmpPath / "input.cst",
+        retPath = tmpPath / "input" / "Result" / "Model.log";
+    if (!filesystem::exists(tmpPath / "ok")) {
+        filesystem::create_directories(tmpPath);
+        filesystem::copy_file(path, cstPath);
+        utils::writeFile(basPath.u8string(), SRC_CST_RUN_BAS);
 
-    auto projPath = regex_replace(path, regex("\\.cst$"), "");
-    auto logPath = filesystem::path(projPath) / "Result" / "Model.log";
-    if (!filesystem::exists(logPath)) {
+        _putenv(("CST_PATH=" + cstPath.u8string()).c_str());
+        _putenv(("JSON_PATH=" + jsonPath.u8string()).c_str());
+        _putenv("EXPORT_SOLIDS=TRUE");
         _putenv("BUILD_MATRIX=TRUE");
+
+        // https://stackoverflow.com/questions/9964865/c-system-not-working-when-there-are-spaces-in-two-different-parameters
+        auto cmd = "\"\"" + getCstExe(cstDir) + "\" -i -m \"" + basPath.u8string() + "\" > \"" + logPath.u8string() + "\" 2>&1\"";
+        auto code = system(cmd.c_str());
+        ASSERT(code == 0, "Parse CST Project failed: " + cmd + ", see " + logPath.u8string());
     }
 
-    auto code = system(cmd.c_str());
-    ASSERT(code == 0, "Parse CST Project failed: " + cmd + ", log " + log);
-
-    if (filesystem::exists(logPath)) {
-        ifstream input(logPath);
-        string line;
-
-        regex re("\\s*without subcycles:\\s+(\\S+) (\\w+).*");
-        smatch dtMatch;
-        while (getline(input, line)) {
-            if (regex_match(line, dtMatch, re)) {
-                auto unit = dtMatch[2];
-                if (UNITS.count(unit) > 0) {
-                    dt = stof(dtMatch[1]) * UNITS[unit];
-                } else {
-                    cerr << "WARN: unknown unit '" << unit << "' in " << logPath << endl;
-                }
+    ifstream retInput(retPath);
+    string line;
+    regex re("\\s*without subcycles:\\s+(\\S+) (\\w+).*");
+    smatch dtMatch;
+    while (std::getline(retInput, line)) {
+        if (regex_match(line, dtMatch, re)) {
+            auto unit = dtMatch[2];
+            if (UNITS.count(unit) > 0) {
+                dt = stof(dtMatch[1]) * UNITS[unit];
+            } else {
+                cerr << "WARN: unknown unit '" << unit << "' in " << retPath << endl;
             }
         }
-        input.close();
-        if (dt < 0) {
-            cerr << "WARN: cannot get dt from '" << logPath << "'" << endl;
-        }
     }
+    retInput.close();
+    ASSERT(dt > 0, "cannot get dt from '" + logPath.u8string() + "'");
 
-    auto meta = json::parse(utils::readFile(json));
+    auto meta = json::parse(utils::readFile(jsonPath.u8string()));
     for (auto item : meta["ports"]) {
         auto jSrc = item["src"], jDst = item["dst"];
         auto src = float3 { jSrc[0].get<float>(), jSrc[1].get<float>(), jSrc[2].get<float>() };
@@ -92,51 +112,45 @@ void cst::Project::ForkAndExportSettings(string cstPath) {
     units.time = jUnits["time"].get<float>();
     units.frequency = jUnits["frequency"].get<float>();
 
-    ifstream input(json + ".excitation.txt");
+    ifstream sourceInput(jsonPath.u8string() + ".excitation.txt");
     string header;
-    getline(input, header);
-    getline(input, header);
+    std::getline(sourceInput, header);
+    std::getline(sourceInput, header);
     float x, y;
-    while (input >> x >> y) {
+    while (sourceInput >> x >> y) {
         excitation.x.push_back(x * units.time);
         excitation.y.push_back(y);
     }
-    input.close();
+    sourceInput.close();
 
-    filesystem::remove_all(tmp);
+    utils::writeFile((tmpPath / "ok").u8string(), "");
+    return cstPath.u8string();
 }
 
-cst::Project::Project(string &path, string &version) {
+cst::Project::Project(string &path, string &version, bool keepCache) {
     this->path = path;
     this->version = version;
+    this->keepCache = keepCache;
 
-    auto cstPath = getCstPath(version);
+    auto cstDir = getCstDir(version);
     if (dllCache.count(version) == 0) {
-        wchar_t cwd[1024] = { 0 };
-        DWORD len = sizeof(cwd) / sizeof(wchar_t);
-        GetCurrentDirectoryW(len, cwd);
-
-        auto dir = cstPath + "AMD64";
-        SetCurrentDirectoryW(utils::utf8ToWstring(dir).c_str());
-
-        dllCache[version] = new utils::DLL(dir + "\\CSTResultReader_AMD64.dll");
-        SetCurrentDirectoryW(cwd);
+        dllCache[version] = getCstDll(cstDir);
     }
-
-    ForkAndExportSettings(cstPath);
-
-    ASSERT(dllCache.count(version) == 1, "Load Dll Version " + version + " Failed");
     dll = dllCache[version];
+
+    cachePath = MakeCacheAndLoadSettings(cstDir);
     auto OpenProject = (CST_OpenProject_PTR) dll->getProc("CST_OpenProject");
-    auto ret = OpenProject ? OpenProject(path.c_str(), &handle) : -1;
-    ASSERT(ret == 0, "Open CST Project '" + path + "' Failed: " + to_string(ret));
+    auto ret = OpenProject ? OpenProject(cachePath.c_str(), &handle) : -1;
+    ASSERT(ret == 0, "Open CST project '" + path + "' failed with code " + to_string(ret) + ", cache " + cachePath);
 }
 
 cst::Project::~Project() {
-    ASSERT(dll != NULL, "project " + path + " already destroyed");
     auto CloseProject = (CST_CloseProject_PTR) dll->getProc("CST_CloseProject");
     CloseProject(&handle);
     dll = NULL;
+    if (!keepCache) {
+        filesystem::remove_all(filesystem::path(cachePath).parent_path());
+    }
 }
 
 Grid cst::Project::GetHexGrid() {

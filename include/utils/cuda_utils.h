@@ -9,12 +9,6 @@
 #ifndef CUDA_UTILS_H
 #define CUDA_UTILS_H
 
-#ifdef _WIN32
-#define DLL_EXPORT __declspec(dllexport)
-#else
-#define DLL_EXPORT
-#endif
-
 // https://stackoverflow.com/a/27992604
 #ifdef __INTELLISENSE__
 dim3 blockIdx;
