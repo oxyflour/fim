@@ -1,9 +1,9 @@
 #include "cst.h"
 #include "fit.h"
 #include "occ.h"
+#include "plt.h"
 
 using namespace std;
-namespace plt = matplotlibcpp;
 
 auto solve() {
     //auto grid = Grid { range<double>(-5, 5, 1), range<double>(-5, 5, 1), range<double>(-5, 5, 1) };

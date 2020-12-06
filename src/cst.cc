@@ -42,7 +42,7 @@ static auto getCstDll(string &cstDir) {
 }
 
 map<string, float> UNITS = {
-    { "ns", 1e-9 },
+    { "ns", 1e-9f },
 };
 
 static auto hashOfFile(string &path) {

@@ -43,12 +43,12 @@ fit::Coefficient::~Coefficient() {
 
 void fit::Coefficient::UpdateFromPort(fit::Port &port) {
     auto &pos = port.pos;
-    for (int i = 0, len = pos.size(), c = len / 2; i < len - 1; i ++) {
+    for (int i = 0, len = pos.size(), c = len / 2 - 1; i < len - 1; i ++) {
         auto d = pos[i + 1] - pos[i];
         auto g = grid->GetFlatIndex(pos[i], d.x ? 0 : d.y ? 1 : 2);
         if (i != c) {
-            //le[g] = 1;
-            //re[g] = 0;
+            le[g] = 1;
+            re[g] = 0;
         }
     }
 }
