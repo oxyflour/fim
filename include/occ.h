@@ -12,11 +12,6 @@ namespace occ {
         bool intersects(bound_type &bound, double tol);
     } bound_type;
 
-    typedef struct shape_bounds {
-        const TopoDS_Shape shape;
-        bound_type bound;
-    } shape_bounds;
-
     typedef struct Step {
         static TopoDS_Shape load(std::string &file);
         static void save(std::string &file, TopoDS_Shape &shape);
@@ -47,8 +42,8 @@ namespace occ {
         std::vector<float> sx, sy, sz, lx, ly, lz;
         std::map<int, TopoDS_Shape> msx, msy, msz, mlx, mly, mlz;
         TopoDS_Shape shape;
+        TopoDS_Shape faces;
         double xmin, ymin, zmin, xmax, ymax, zmax;
-        std::vector<shape_bounds> faceBounds;
         void MeshX();
         void MeshY();
         void MeshZ();
