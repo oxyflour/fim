@@ -19,7 +19,7 @@ auto solve() {
     auto eps = proj.GetMatrix(100), mue = proj.GetMatrix(101);
     auto mats = fit::Matrix(grid, eps, mue);
     auto port = fit::Port(grid, proj.ports[0]);
-    auto solver = fit::Solver(mats, proj.dt, vector<fit::Port>({ port }));
+    auto solver = fit::Solver(mats, proj.dt / 100, vector<fit::Port>({ port }));
 
     int steps = 3074;
     vector<float> sigt(steps), sigs(steps), sigy(steps);
