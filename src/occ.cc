@@ -2,6 +2,8 @@
 #include "utils/assert.h"
 #include "utils.h"
 
+#include <ctpl_stl.h>
+
 #include <vector>
 #include <algorithm>
 
@@ -125,9 +127,11 @@ Mesher::Mesher(Grid &grid, string &file, float unit) {
     ly.resize(nxyz); std::fill(ly.begin(), ly.end(), 0);
     lz.resize(nxyz); std::fill(lz.begin(), lz.end(), 0);
 
-    //MeshX();
-    MeshY();
-    //MeshZ();
+    ctpl::thread_pool pool(thread::hardware_concurrency());
+    for (int i = 0; i < nx - 1; i ++) {
+        pool.push([&, i](int id) { MeshX(i, i + 1); });
+    }
+    pool.stop(true);
 
     vector<TopoDS_Shape> shapes;
     for (auto pair : msx) shapes.push_back(pair.second);
@@ -192,11 +196,11 @@ void calcWireNormal(bound_type &bound, vector<TopoDS_Shape> &faces, int dir) {
     }
 }
 
-void Mesher::MeshX() {
+void Mesher::MeshX(int i0, int i1) {
     auto &areaArr = sx, &lengthArr = ly;
     auto &surfMap = msx, &edgeMap = mly;
 
-    for (int i = 0; i < nx - 1; i ++) {
+    for (int i = max(i0, 0); i < min(i1, nx - 1); i ++) {
         auto x0 = xs[i], x1 = xs[i + 1], dx = x1 - x0;
         if (!intersects(x0, x1, xmin, xmax)) continue;
 
@@ -226,6 +230,7 @@ void Mesher::MeshX() {
                 auto surf = Bool::common(cy, box);
                 auto area = areaArr[idx] = getSurfaceProps(surf).Mass() / dy / dz;
                 if (area > 0.001 && area < 0.999) {
+                    lock_guard guard(lock);
                     surfMap[idx] = surf;
                 }
 
@@ -233,6 +238,7 @@ void Mesher::MeshX() {
                 auto edge = Bool::common(cy, line);
                 auto length = lengthArr[idx] = getLinearProps(edge).Mass() / dy;
                 if (length > 0.01 && length < 0.99) {
+                    lock_guard guard(lock);
                     edgeMap[idx] = edge;
                 }
 
@@ -245,11 +251,11 @@ void Mesher::MeshX() {
     }
 }
 
-void Mesher::MeshY() {
+void Mesher::MeshY(int j0, int j1) {
     auto &areaArr = sy, &lengthArr = lz;
     auto &surfMap = msy, &edgeMap = mlz;
 
-    for (int j = 0; j < ny - 1; j ++) {
+    for (int j = max(0, j0); j < min(ny - 1, j1); j ++) {
         auto y0 = ys[j], y1 = ys[j + 1], dy = y1 - y0;
         if (!intersects(y0, y1, ymin, ymax)) continue;
 
@@ -298,11 +304,11 @@ void Mesher::MeshY() {
     }
 }
 
-void Mesher::MeshZ() {
+void Mesher::MeshZ(int j0, int j1) {
     auto &areaArr = sz, &lengthArr = lx;
     auto &surfMap = msz, &edgeMap = mlx;
 
-    for (int k = 0; k < nz - 1; k ++) {
+    for (int k = max(0, j0); k < min(nz - 1, j1); k ++) {
         auto z0 = zs[k], z1 = zs[k + 1], dz = z1 - z0;
         if (!intersects(z0, z1, zmin, zmax)) continue;
 

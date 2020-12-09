@@ -1,6 +1,7 @@
 #include "grid.h"
 
 #include <map>
+#include <mutex>
 #include <TopoDS_Shape.hxx>
 
 #ifndef OCC_H
@@ -41,12 +42,15 @@ namespace occ {
         std::vector<double> xs, ys, zs;
         std::vector<float> sx, sy, sz, lx, ly, lz;
         std::map<int, TopoDS_Shape> msx, msy, msz, mlx, mly, mlz;
+
         TopoDS_Shape shape;
         TopoDS_Shape faces;
         double xmin, ymin, zmin, xmax, ymax, zmax;
-        void MeshX();
-        void MeshY();
-        void MeshZ();
+
+        std::mutex lock;
+        void MeshX(int i0, int i1);
+        void MeshY(int j0, int j1);
+        void MeshZ(int k0, int k1);
     } Mesher;
 };
 

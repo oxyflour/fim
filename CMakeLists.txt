@@ -33,6 +33,14 @@ if(NOT picosha2_POPULATED)
   FetchContent_Populate(picosha2)
 endif()
 
+# https://github.com/okdshin/PicoSHA2
+FetchContent_Declare(threadpool
+  GIT_REPOSITORY https://github.com/vit-vit/CTPL)
+FetchContent_GetProperties(threadpool)
+if(NOT threadpool_POPULATED)
+  FetchContent_Populate(threadpool)
+endif()
+
 # https://github.com/oxyflour/ncc/blob/master/CMakeLists.txt
 function(download_extract url filename)
 if(NOT EXISTS ${filename})
@@ -63,7 +71,7 @@ file(GLOB SOURCE_FILES "src/*.cc")
 add_executable(${PROJECT_NAME} ${SOURCE_FILES} include_generated)
 
 target_include_directories(${PROJECT_NAME}
-  PRIVATE ${picosha2_SOURCE_DIR} ${matplotlib_SOURCE_DIR} ${Python3_INCLUDE_DIRS} build/occt/occt-7.4/include)
+  PRIVATE ${threadpool_SOURCE_DIR} ${picosha2_SOURCE_DIR} ${matplotlib_SOURCE_DIR} ${Python3_INCLUDE_DIRS} build/occt/occt-7.4/include)
 IF (WIN32)
 target_link_libraries(${PROJECT_NAME} PRIVATE Python3::Python nlohmann_json::nlohmann_json TKBin TKBinL TKBinTObj TKBinXCAF TKBO TKBool TKBRep TKCAF TKCDF TKD3DHost TKDCAF TKDFBrowser TKDraw TKernel TKFeat TKFillet TKG2d TKG3d TKGeomAlgo TKGeomBase TKHLR TKIGES TKIVtk TKIVtkDraw TKLCAF TKMath TKMesh TKMeshVS TKOffset TKOpenGl TKPrim TKQADraw TKRWMesh TKService TKShapeView TKShHealing TKStd TKStdL TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKSTL TKTInspector TKTInspectorAPI TKTObj TKTObjDRAW TKToolsDraw TKTopAlgo TKTopTest TKTreeModel TKV3d TKVCAF TKView TKViewerTest TKVInspector TKVRML TKXCAF TKXDEDRAW TKXDEIGES TKXDESTEP TKXMesh TKXml TKXmlL TKXmlTObj TKXmlXCAF TKXSBase TKXSDRAW)
 string(REPLACE "/" "\\" PROJECT_BINARY_DIR_WIN ${PROJECT_BINARY_DIR})
