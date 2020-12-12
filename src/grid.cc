@@ -1,31 +1,10 @@
+#include <math.h>
+
+#include "cuda.h"
 #include "grid.h"
 
-#include <math.h>
 using namespace std;
-
-int3 int3::operator- (const int3& first) {
-    return int3 { first.x - x, first.y - y, first.z - z };
-}
-
-int3 int3::operator+ (const int3& first) {
-    return int3 { first.x + x, first.y + y, first.z + z };
-}
-
-int3 int3::abs() {
-    return int3 { ::abs(x), ::abs(y), ::abs(z) };
-}
-
-int int3::sum() {
-    return x + y + z;
-}
-
-float3 float3::operator- (const float3& first) {
-    return float3 { first.x - x, first.y - y, first.z - z };
-}
-
-float float3::length() {
-    return sqrt(x * x + y * y + z * z);
-}
+using namespace grid;
 
 float3 Grid::At(int3 idx) {
     return float3 { (float) xs[idx.x], (float) ys[idx.y], (float) zs[idx.z] };
@@ -42,7 +21,7 @@ int3 Grid::FindIndex(float3 pos, float epsi) {
         for (int j = 0; j < ny; j ++) {
             for (int k = 0; k < nz; k ++) {
                 float3 pt = { (float) xs[i], (float) ys[j], (float) zs[k] };
-                if ((pos - pt).length() < epsi) {
+                if (length(pos - pt) < epsi) {
                     return int3 { i, j, k };
                 }
             }
@@ -54,7 +33,7 @@ int3 Grid::FindIndex(float3 pos, float epsi) {
 vector<int3> Grid::ParsePort(float3 src, float3 dst, float epsi) {
     auto i = FindIndex(src, epsi),
         j = FindIndex(dst, epsi);
-    auto len = (i - j).abs().sum();
+    auto len = sum(abs(i - j));
     vector<int3> ret;
     if (len == 0) {
         return ret;
@@ -67,7 +46,7 @@ vector<int3> Grid::ParsePort(float3 src, float3 dst, float epsi) {
         int3 idx;
         for (int m = 0; m < 6; m ++) {
             auto n = i + dir[m];
-            auto r = (At(n) - dst).length();
+            auto r = length(At(n) - dst);
             if (r < dist) {
                 dist = r;
                 idx = n;

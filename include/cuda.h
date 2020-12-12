@@ -1,13 +1,11 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string>
-
-#include "utils/assert.h"
+#include "math.h"
+#include "stdio.h"
+#include "stdlib.h"
 #include "cuda_runtime.h"
 #include "cuda_fp16.h"
 
-#ifndef CUDA_UTILS_H
-#define CUDA_UTILS_H
+#ifndef CUDA_H
+#define CUDA_H
 
 // https://stackoverflow.com/a/27992604
 #ifdef __INTELLISENSE__
@@ -64,6 +62,32 @@ template <typename T> T *from_device(const T *in, size_t sz, T *out = NULL) {
         CU_ASSERT(cudaMemcpy(out, in, sizeof(T) * sz, cudaMemcpyDefault));
     }
     return out;
+}
+
+// math
+
+static int3 operator- (const int3 &a, const int3 &b) {
+    return int3 { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
+static int3 operator+ (const int3 &a, const int3 &b) {
+    return int3 { a.x + b.x, a.y + b.y, a.z + b.z };
+}
+
+static int3 abs(int3 &a) {
+    return int3 { ::abs(a.x), ::abs(a.y), ::abs(a.z) };
+}
+
+static int sum(int3 &a) {
+    return a.x + a.y + a.z;
+}
+
+static float3 operator- (const float3 &a, const float3 &b) {
+    return float3 { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
+static float length(const float3 &a) {
+    return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
 }
 
 #endif

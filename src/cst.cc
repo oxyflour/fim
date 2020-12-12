@@ -1,16 +1,22 @@
-#include "cst.h"
-#include "utils.h"
-#include "generated/cst_run_bas.h"
-
-#include "picosha2.h"
-
 #include <regex>
 #include <fstream>
 #include <filesystem>
-using namespace std;
+#include <iostream>
 
 #include <nlohmann/json.hpp>
+#include <picosha2.h>
+
+#include "generated/cst_run_bas.h"
+
+#include "cuda.h"
+#include "cst.h"
+#include "utils.h"
+#include "helper.h"
+
 using json = nlohmann::json;
+using namespace std;
+using namespace grid;
+using namespace cst;
 
 static map<string, utils::DLL*> dllCache;
 static auto getCstDir(string &version) {
@@ -53,7 +59,7 @@ static auto hashOfFile(string &path) {
     return picosha2::hash256_hex_string(hash);
 }
 
-string cst::Project::MakeCacheAndLoadSettings(string cstDir) {
+string Project::MakeCacheAndLoadSettings(string cstDir) {
     auto fileHash = hashOfFile(path).substr(0, 16) + "-" + picosha2::hash256_hex_string(path).substr(0, 16);
 
     auto tmpPath = filesystem::temp_directory_path() / ("cst-parser-" + fileHash),
@@ -98,9 +104,9 @@ string cst::Project::MakeCacheAndLoadSettings(string cstDir) {
     auto meta = json::parse(utils::readFile(jsonPath.u8string()));
     for (auto item : meta["ports"]) {
         auto jSrc = item["src"], jDst = item["dst"];
-        auto src = float3 { jSrc[0].get<float>(), jSrc[1].get<float>(), jSrc[2].get<float>() };
-        auto dst = float3 { jDst[0].get<float>(), jDst[1].get<float>(), jDst[2].get<float>() };
-        ports.push_back(port_type { src, dst });
+        auto src = make_float3(jSrc[0].get<float>(), jSrc[1].get<float>(), jSrc[2].get<float>());
+        auto dst = make_float3(jDst[0].get<float>(), jDst[1].get<float>(), jDst[2].get<float>());
+        ports.push_back({ src, dst });
     }
     for (auto item : meta["solids"]) {
         auto name = item["name"].get<string>(),
@@ -127,7 +133,7 @@ string cst::Project::MakeCacheAndLoadSettings(string cstDir) {
     return cstPath.u8string();
 }
 
-cst::Project::Project(string &path, string &version, bool keepCache) {
+Project::Project(string &path, string &version, bool keepCache) {
     this->path = path;
     this->version = version;
     this->keepCache = keepCache;
@@ -144,7 +150,7 @@ cst::Project::Project(string &path, string &version, bool keepCache) {
     ASSERT(ret == 0, "Open CST project '" + path + "' failed with code " + to_string(ret) + ", cache " + cachePath);
 }
 
-cst::Project::~Project() {
+Project::~Project() {
     auto CloseProject = (CST_CloseProject_PTR) dll->getProc("CST_CloseProject");
     CloseProject(&handle);
     dll = NULL;
@@ -153,7 +159,7 @@ cst::Project::~Project() {
     }
 }
 
-Grid cst::Project::GetHexGrid() {
+Grid Project::GetHexGrid() {
     ASSERT(dll != NULL, "project " + path + " already destroyed");
 
     int nxyz[3] = { 0 };
@@ -182,7 +188,7 @@ Grid cst::Project::GetHexGrid() {
     return Grid { xs, ys, zs };
 }
 
-float *cst::Project::GetMatrix(int mat) {
+float *Project::GetMatrix(int mat) {
     ASSERT(dll != NULL, "project " + path + " already destroyed");
 
     int nxyz[3] = { 0 };
@@ -200,12 +206,13 @@ float *cst::Project::GetMatrix(int mat) {
         // reorder for mue
         auto clone = new float[sz];
         int nxy = nx * ny, nxyz = nxy * nz;
+        auto idx = [=](int i, int j, int k, int d){ return (i % nx) + (j % ny) * nx + (k % nz) * nxy + d * nxyz; };
         for (int i = 0; i < nx; i ++) {
             for (int j = 0; j < ny; j ++) {
                 for (int k = 0; k < nz; k ++) {
-                    clone[i + j * nx + k * nxy         ] = array[((i+1) % nx) + j * nx + k * nxy         ];
-                    clone[i + j * nx + k * nxy + nxyz  ] = array[i + ((j+1) % ny) * nx + k * nxy + nxyz  ];
-                    clone[i + j * nx + k * nxy + nxyz*2] = array[i + j * nx + ((k+1) % nz) * nxy + nxyz*2];
+                    clone[idx(i, j, k, 0)] = array[idx(i + 1, j, k, 0)];
+                    clone[idx(i, j, k, 1)] = array[idx(i, j + 1, k, 1)];
+                    clone[idx(i, j, k, 2)] = array[idx(i, j, k + 1, 2)];
                 }
             }
         }
@@ -215,7 +222,7 @@ float *cst::Project::GetMatrix(int mat) {
     }
 }
 
-double *cst::Project::Get1DResult(string tree, int num, int type) {
+double *Project::Get1DResult(string tree, int num, int type) {
     ASSERT(dll != NULL, "project " + path + " already destroyed");
 
     auto getResultSize = (CST_Get1DResultSize_PTR) dll->getProc("CST_Get1DResultSize");

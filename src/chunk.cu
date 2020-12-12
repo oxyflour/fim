@@ -1,7 +1,6 @@
-#include "utils/cuda_utils.h"
-#include "chunk.h"
+#include <stdio.h>
 
-#include "stdio.h"
+#include "chunk.h"
 
 #ifdef _WIN32
 #define DLL_EXPORT __declspec(dllexport)
@@ -87,11 +86,11 @@ __global__ void kernel_step_e_$i(float s, float *p) {
     chunk_$i.step_e(s, p);
 }
 
-extern "C" DLL_EXPORT int init_$i(float *le, float *re, float *lh, float *rh) {
+extern "C" DLL_EXPORT int init_$i(fit::Coefficient *coe) {
     constexpr int NXYZ = $nx * $ny * $nz, NVAR = NXYZ * 3;
     kernel_init_$i CU_DIM(2048, 256) (
-        to_device(le, NVAR), to_device(re, NVAR),
-        to_device(lh, NVAR), to_device(rh, NVAR));
+        to_device(coe->le, NVAR), to_device(coe->re, NVAR),
+        to_device(coe->lh, NVAR), to_device(coe->rh, NVAR));
     CU_ASSERT(cudaDeviceSynchronize());
     chunk_$i.sig = malloc_device<float>(1);
     return 0;

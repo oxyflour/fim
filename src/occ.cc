@@ -1,7 +1,3 @@
-#include "occ.h"
-#include "utils/assert.h"
-#include "utils.h"
-
 #include <ctpl_stl.h>
 
 #include <vector>
@@ -33,6 +29,11 @@
 
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
+
+#include "cuda.h"
+#include "occ.h"
+#include "utils.h"
+#include "helper.h"
 
 using namespace std;
 using namespace occ;
@@ -105,7 +106,7 @@ static auto getSurfaceProps(const TopoDS_Shape &shape) {
     return props;
 }
 
-Mesher::Mesher(Grid &grid, string &file, float unit) {
+Mesher::Mesher(grid::Grid &grid, string &file, float unit) {
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
 
     nx = xs.size(); ny = ys.size(); nz = zs.size();
@@ -204,8 +205,8 @@ void Mesher::MeshX(int i0, int i1) {
         auto x0 = xs[i], x1 = xs[i + 1], dx = x1 - x0;
         if (!intersects(x0, x1, xmin, xmax)) continue;
 
-        auto box = Builder::box(float3(x0, ymin, zmin), float3(x1, ymax, zmax));
-        auto cyz = Bool::common(shape, Builder::plane(float3(x0, 0, 0), float3(1, 0, 0)));
+        auto box = Builder::box(make_float3(x0, ymin, zmin), make_float3(x1, ymax, zmax));
+        auto cyz = Bool::common(shape, Builder::plane(make_float3(x0, 0, 0), make_float3(1, 0, 0)));
         auto myz = Bool::common(faces, box);
         if (BOPTools_AlgoTools3D::IsEmptyShape(cyz)) continue;
 
@@ -214,7 +215,7 @@ void Mesher::MeshX(int i0, int i1) {
             auto y0 = ys[j], y1 = ys[j + 1], dy = y1 - y0;
             if (!intersects(y0, y1, byz.ymin, byz.ymax)) continue;
 
-            auto box = Builder::box(float3(x0, y0, zmin), float3(x1, y1, zmax));
+            auto box = Builder::box(make_float3(x0, y0, zmin), make_float3(x1, y1, zmax));
             auto cy = Bool::common(cyz, box);
             auto my = Bool::common(myz, box);
             if (BOPTools_AlgoTools3D::IsEmptyShape(cy)) continue;
@@ -226,7 +227,7 @@ void Mesher::MeshX(int i0, int i1) {
 
                 auto idx = i + j * nx + k * nx * ny;
 
-                auto box = Builder::box(float3(x0, y0, z0), float3(x1, y1, z1));
+                auto box = Builder::box(make_float3(x0, y0, z0), make_float3(x1, y1, z1));
                 auto surf = Bool::common(cy, box);
                 auto area = areaArr[idx] = getSurfaceProps(surf).Mass() / dy / dz;
                 if (area > 0.001 && area < 0.999) {
@@ -234,7 +235,7 @@ void Mesher::MeshX(int i0, int i1) {
                     surfMap[idx] = surf;
                 }
 
-                auto line = Builder::line(float3(x0, y0, z0), float3(x0, y1, z0));
+                auto line = Builder::line(make_float3(x0, y0, z0), make_float3(x0, y1, z0));
                 auto edge = Bool::common(cy, line);
                 auto length = lengthArr[idx] = getLinearProps(edge).Mass() / dy;
                 if (length > 0.01 && length < 0.99) {
@@ -259,8 +260,8 @@ void Mesher::MeshY(int j0, int j1) {
         auto y0 = ys[j], y1 = ys[j + 1], dy = y1 - y0;
         if (!intersects(y0, y1, ymin, ymax)) continue;
 
-        auto box = Builder::box(float3(xmin, y0, zmin), float3(xmax, y1, zmax));
-        auto czx = Bool::common(shape, Builder::plane(float3(0, y0, 0), float3(0, 1, 0)));
+        auto box = Builder::box(make_float3(xmin, y0, zmin), make_float3(xmax, y1, zmax));
+        auto czx = Bool::common(shape, Builder::plane(make_float3(0, y0, 0), make_float3(0, 1, 0)));
         auto mzx = Bool::common(faces, box);
         if (BOPTools_AlgoTools3D::IsEmptyShape(czx)) continue;
 
@@ -269,7 +270,7 @@ void Mesher::MeshY(int j0, int j1) {
             auto z0 = zs[k], z1 = zs[k + 1], dz = z1 - z0;
             if (!intersects(z0, z1, bzx.zmin, bzx.zmax)) continue;
 
-            auto box = Builder::box(float3(xmin, y0, z0), float3(xmax, y1, z1));
+            auto box = Builder::box(make_float3(xmin, y0, z0), make_float3(xmax, y1, z1));
             auto cz = Bool::common(czx, box);
             auto mz = Bool::common(mzx, box);
             if (BOPTools_AlgoTools3D::IsEmptyShape(cz)) continue;
@@ -281,14 +282,14 @@ void Mesher::MeshY(int j0, int j1) {
 
                 auto idx = i + j * nx + k * nx * ny;
 
-                auto box = Builder::box(float3(x0, y0, z0), float3(x1, y1, z1));
+                auto box = Builder::box(make_float3(x0, y0, z0), make_float3(x1, y1, z1));
                 auto surf = Bool::common(cz, box);
                 auto area = areaArr[idx] = getSurfaceProps(surf).Mass() / dz / dx;
                 if (area > 0.001 && area < 0.999) {
                     surfMap[idx] = surf;
                 }
 
-                auto line = Builder::line(float3(x0, y0, z0), float3(x0, y0, z1));
+                auto line = Builder::line(make_float3(x0, y0, z0), make_float3(x0, y0, z1));
                 auto edge = Bool::common(cz, line);
                 auto length = lengthArr[idx] = getLinearProps(edge).Mass() / dz;
                 if (length > 0.01 && length < 0.99) {
@@ -312,8 +313,8 @@ void Mesher::MeshZ(int j0, int j1) {
         auto z0 = zs[k], z1 = zs[k + 1], dz = z1 - z0;
         if (!intersects(z0, z1, zmin, zmax)) continue;
 
-        auto box = Builder::box(float3(xmin, ymin, z0), float3(xmax, ymax, z1));
-        auto cxy = Bool::common(shape, Builder::plane(float3(0, 0, z0), float3(0, 0, 1)));
+        auto box = Builder::box(make_float3(xmin, ymin, z0), make_float3(xmax, ymax, z1));
+        auto cxy = Bool::common(shape, Builder::plane(make_float3(0, 0, z0), make_float3(0, 0, 1)));
         auto mxy = Bool::common(faces, box);
         if (BOPTools_AlgoTools3D::IsEmptyShape(cxy)) continue;
 
@@ -322,7 +323,7 @@ void Mesher::MeshZ(int j0, int j1) {
             auto x0 = xs[i], x1 = xs[i + 1], dx = x1 - x0;
             if (!intersects(x0, x1, bxy.xmin, bxy.xmax)) continue;
 
-            auto box = Builder::box(float3(x0, ymin, z0), float3(x1, ymax, z1));
+            auto box = Builder::box(make_float3(x0, ymin, z0), make_float3(x1, ymax, z1));
             auto cx = Bool::common(cxy, box);
             auto mx = Bool::common(mxy, box);
             if (BOPTools_AlgoTools3D::IsEmptyShape(cx)) continue;
@@ -334,14 +335,14 @@ void Mesher::MeshZ(int j0, int j1) {
 
                 auto idx = i + j * nx + k * nx * ny;
 
-                auto box = Builder::box(float3(x0, y0, z0), float3(x1, y1, z1));
+                auto box = Builder::box(make_float3(x0, y0, z0), make_float3(x1, y1, z1));
                 auto surf = Bool::common(cx, box);
                 auto area = areaArr[idx] = getSurfaceProps(surf).Mass() / dx / dy;
                 if (area > 0.001 && area < 0.999) {
                     surfMap[idx] = surf;
                 }
 
-                auto line = Builder::line(float3(x0, y0, z0), float3(x1, y0, z0));
+                auto line = Builder::line(make_float3(x0, y0, z0), make_float3(x1, y0, z0));
                 auto edge = Bool::common(cx, line);
                 auto length = lengthArr[idx] = getLinearProps(edge).Mass() / dx;
                 if (length > 0.01 && length < 0.99) {

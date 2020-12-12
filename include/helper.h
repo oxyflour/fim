@@ -1,9 +1,9 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <string>
-#include <exception>
-#include <iostream>
 
-#ifndef ASSERT_H
-#define ASSERT_H
+#ifndef TOOL_H
+#define TOOL_H
 
 #define ASSERT(ok, msg) do { if (!(ok)) _panic(msg, __FILE__, __LINE__); } while (0);
 inline void _panic(std::string msg, const char *file, int line)

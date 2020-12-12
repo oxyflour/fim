@@ -1,6 +1,6 @@
+#include "cuda.h"
 #include "utils.h"
 #include "grid.h"
-#include "chunk.h"
 #include "cst.h"
 
 #ifndef FIT_H
@@ -13,32 +13,23 @@ namespace fit {
         int idx;
         int dir;
         float imp = 50;
-        Port(Grid &grid, cst::port_type &port, float epsi = 1e-6);
+        Port(grid::Grid &grid, cst::port_type &port, float epsi = 1e-6);
     } Port;
 
     typedef struct Matrix {
-        Grid *grid;
+        grid::Grid *grid;
         float *eps, *mue;
-        Matrix(Grid &grid, float *eps, float *mue) : eps{eps}, mue{mue}, grid{&grid} { };
+        Matrix(grid::Grid &grid, float *eps, float *mue) : eps{eps}, mue{mue}, grid{&grid} { };
     } Matrix;
 
     typedef struct Coefficient {
         Coefficient(Matrix &mat, float dt);
         ~Coefficient();
-        Grid *grid;
+        grid::Grid *grid;
         float *le, *re, *lh, *rh;
-        void UpdateFromPort(Port &port);
+        void Add(Port &port);
+        std::vector<Port> ports;
     } Coefficient;
-
-    typedef struct Solver {
-        Solver(Matrix &mat, float dt, std::vector<Port> &ports);
-        ~Solver();
-        float Step(float s);
-        utils::DLL *dll;
-        decltype(&init_$i) FnInit;
-        decltype(&step_$i) FnStep;
-        decltype(&quit_$i) FnQuit;
-    } Solver;
 }
 
 #endif

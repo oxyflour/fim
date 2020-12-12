@@ -1,8 +1,8 @@
-#include "grid.h"
-
 #include <map>
 #include <mutex>
 #include <TopoDS_Shape.hxx>
+
+#include "grid.h"
 
 #ifndef OCC_H
 #define OCC_H
@@ -36,7 +36,7 @@ namespace occ {
     } Shape;
 
     typedef struct Mesher {
-        Mesher(Grid &grid, std::string &file, float unit = 1.f);
+        Mesher(grid::Grid &grid, std::string &file, float unit = 1.f);
     private:
         int nx, ny, nz;
         std::vector<double> xs, ys, zs;

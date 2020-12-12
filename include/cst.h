@@ -3,11 +3,10 @@
 
 #include <windows.h>
 
-#include "utils/cst_interface.h"
-#include "utils/assert.h"
-
-#include "grid.h"
+#include "vendor/cst.h"
+#include "cuda.h"
 #include "utils.h"
+#include "grid.h"
 
 #ifndef CST_H
 #define CST_H
@@ -33,7 +32,7 @@ namespace cst {
         Project(std::string &path, std::string &version, bool keepCache = false);
         ~Project();
 
-        Grid GetHexGrid();
+        grid::Grid GetHexGrid();
         float *GetMatrix(int mat);
         double *Get1DResult(std::string tree, int num, int type);
 

@@ -46,10 +46,10 @@ namespace utils {
         }
         return ret;
     }
-    template <typename T> std::vector<T> range(T from, T to) {
+    template <typename T> std::vector<T> inline range(T from, T to) {
         return range(from, to, 1);
     }
-    template <typename T> std::vector<T> range(T to) {
+    template <typename T> std::vector<T> inline range(T to) {
         return range(0, to, 1);
     }
 

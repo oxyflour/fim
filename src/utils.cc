@@ -1,10 +1,11 @@
-#include "utils.h"
-#include "utils/assert.h"
-
 #include <fstream>
 #include <sstream>
 #include <codecvt>
 #include <vector>
+
+#include "cuda.h"
+#include "utils.h"
+#include "helper.h"
 
 using namespace std;
 
