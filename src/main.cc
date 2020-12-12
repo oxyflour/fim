@@ -30,10 +30,10 @@ auto solve() {
 
     int steps = 3074;
     vector<float> sigt(steps), sigs(steps), sigy(steps);
-    for (int c = 0; c < steps; c ++) {
+    for (auto c : utils::range(steps)) {
         sigs[c] = utils::interp1(proj.excitation.x, proj.excitation.y, sigt[c] = c * proj.dt);
     }
-    for (int c = 0; c < steps; c ++) {
+    for (auto c : utils::range(steps)) {
         sigy[c] = solver.Step(sigs[c]);
     }
 
