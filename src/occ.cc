@@ -33,7 +33,7 @@
 #include "cuda.h"
 #include "occ.h"
 #include "utils.h"
-#include "helper.h"
+#include "check.h"
 
 using namespace std;
 using namespace occ;
@@ -45,14 +45,14 @@ TopoDS_Shape Step::load(string &file) {
     STEPControl_Reader reader;
     auto stat = reader.ReadFile(file.c_str());
     reader.TransferRoot();
-    ASSERT(stat == IFSelect_RetDone, "load from file " + file + " failed");
+    CHECK(stat == IFSelect_RetDone, "load from file " + file + " failed");
     return reader.Shape();
 }
 
 void Step::save(string &file, TopoDS_Shape &shape) {
     STEPControl_Writer writer;
     auto stat = writer.Transfer(shape, STEPControl_StepModelType::STEPControl_AsIs);
-    ASSERT(stat == IFSelect_RetDone, "save to file " + file + " failed");
+    CHECK(stat == IFSelect_RetDone, "save to file " + file + " failed");
     writer.Write(file.c_str());
 }
 

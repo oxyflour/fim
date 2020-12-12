@@ -2,7 +2,7 @@
 #include "solver.h"
 #include "occ.h"
 #include "plt.h"
-#include "helper.h"
+#include "check.h"
 
 using namespace std;
 
@@ -15,12 +15,12 @@ auto mesh() {
 
 auto solve() {
     auto proj = cst::Project(string("E:\\Projects\\cst-demo\\dipole-test.cst"), string("2019"), true);
-    ASSERT(proj.ports.size() == 1, "Only one port supported, got " + to_string(proj.ports.size()));
+    CHECK(proj.ports.size() == 1, "Only one port supported, got " + to_string(proj.ports.size()));
 
     auto grid = proj.GetHexGrid();
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
 
-    ASSERT(proj.dt > 0, "cannot get dt from project");
+    CHECK(proj.dt > 0, "cannot get dt from project");
     cout << "INFO: dt = " << proj.dt * 1e9 << " ns" << endl;
 
     auto eps = proj.GetMatrix(100), mue = proj.GetMatrix(101);
@@ -37,7 +37,6 @@ auto solve() {
         sigy[c] = solver.Step(sigs[c]);
     }
 
-    cout << sigt.size() << " === " << sigy.size() << endl;
     plt::plot(sigt, sigy);
     plt::show();
 }

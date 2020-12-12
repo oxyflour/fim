@@ -5,7 +5,7 @@
 
 #include "cuda.h"
 #include "utils.h"
-#include "helper.h"
+#include "check.h"
 
 using namespace std;
 
@@ -83,7 +83,7 @@ utils::DLL::DLL(string path) {
 #else
     auto code = -1;
 #endif
-    ASSERT(module != NULL, "LoadLibrary Error: " + path + " (" + to_string(code) + ")");
+    CHECK(module != NULL, "LoadLibrary Error: " + path + " (" + to_string(code) + ")");
 }
 
 utils::DLL::~DLL() {

@@ -4,7 +4,7 @@
 
 #include "generated/inc_chunk_cu.h"
 #include "solver.h"
-#include "helper.h"
+#include "check.h"
 
 using namespace std;
 using namespace fit;
@@ -36,7 +36,7 @@ static auto Compile(Grid &grid, Port &port) {
     }
 
     auto code = system(cmd.c_str());
-    ASSERT(code == 0, "compile " + dll + " failed,\ncmd: " + cmd + "\nmessage: " + utils::readFile(log));
+    CHECK(code == 0, "compile " + dll + " failed,\ncmd: " + cmd + "\nmessage: " + utils::readFile(log));
 
     return new utils::DLL(dll);
 }
@@ -48,14 +48,14 @@ Solver::Solver(Matrix &mats, float dt, vector<Port> &ports) {
     }
 
     auto &grid = *mats.grid;
-    ASSERT(ports.size() == 1, "FIXME: only one port supported");
+    CHECK(ports.size() == 1, "FIXME: only one port supported");
     dll = Compile(grid, ports[0]);
     FnInit = (decltype(FnInit)) dll->getProc("init_0");
     FnStep = (decltype(FnStep)) dll->getProc("step_0");
     FnQuit = (decltype(FnQuit)) dll->getProc("step_0");
-    ASSERT(FnInit && FnStep && FnQuit, "get function failed");
+    CHECK(FnInit && FnStep && FnQuit, "get function failed");
 
-    ASSERT(FnInit(coe) == 0, "solver init failed");
+    CHECK(FnInit(coe) == 0, "solver init failed");
 
     auto nvar = grid.xs.size() * grid.ys.size() * grid.zs.size() * 3;
     E = new float[nvar]; fill(E, E + nvar, 0);

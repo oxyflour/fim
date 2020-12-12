@@ -11,7 +11,7 @@
 #include "cuda.h"
 #include "cst.h"
 #include "utils.h"
-#include "helper.h"
+#include "check.h"
 
 using json = nlohmann::json;
 using namespace std;
@@ -23,12 +23,12 @@ static auto getCstDir(string &version) {
     HKEY handle;
     auto key = wstring(L"SOFTWARE\\Wow6432Node\\CST AG\\CST DESIGN ENVIRONMENT\\") + utils::utf8ToWstring(version);
     auto ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, key.c_str(), 0, KEY_READ, &handle);
-    ASSERT(ret == ERROR_SUCCESS, "RegQuery Error: " + to_string(ret));
+    CHECK(ret == ERROR_SUCCESS, "RegQuery Error: " + to_string(ret));
 
     wchar_t buf[1024] = { 0 };
     DWORD len = sizeof(buf) / sizeof(wchar_t);
     ret = RegQueryValueExW(handle, L"INSTALLPATH", 0, NULL, (LPBYTE) buf, &len);
-    ASSERT(ret == ERROR_SUCCESS, "RegQuery INSTALLPATH Error: " + to_string(ret));
+    CHECK(ret == ERROR_SUCCESS, "RegQuery INSTALLPATH Error: " + to_string(ret));
     return utils::wstringToUtf8(buf);
 }
 static auto getCstExe(string &cstDir) {
@@ -81,7 +81,7 @@ string Project::MakeCacheAndLoadSettings(string cstDir) {
         // https://stackoverflow.com/questions/9964865/c-system-not-working-when-there-are-spaces-in-two-different-parameters
         auto cmd = "\"\"" + getCstExe(cstDir) + "\" -i -m \"" + basPath.u8string() + "\" > \"" + logPath.u8string() + "\" 2>&1\"";
         auto code = system(cmd.c_str());
-        ASSERT(code == 0, "Parse CST Project failed: " + cmd + ", see " + logPath.u8string());
+        CHECK(code == 0, "Parse CST Project failed: " + cmd + ", see " + logPath.u8string());
     }
 
     ifstream retInput(retPath);
@@ -99,7 +99,7 @@ string Project::MakeCacheAndLoadSettings(string cstDir) {
         }
     }
     retInput.close();
-    ASSERT(dt > 0, "cannot get dt from '" + logPath.u8string() + "'");
+    CHECK(dt > 0, "cannot get dt from '" + logPath.u8string() + "'");
 
     auto meta = json::parse(utils::readFile(jsonPath.u8string()));
     for (auto item : meta["ports"]) {
@@ -147,7 +147,7 @@ Project::Project(string &path, string &version, bool keepCache) {
     cachePath = MakeCacheAndLoadSettings(cstDir);
     auto OpenProject = (CST_OpenProject_PTR) dll->getProc("CST_OpenProject");
     auto ret = OpenProject ? OpenProject(cachePath.c_str(), &handle) : -1;
-    ASSERT(ret == 0, "Open CST project '" + path + "' failed with code " + to_string(ret) + ", cache " + cachePath);
+    CHECK(ret == 0, "Open CST project '" + path + "' failed with code " + to_string(ret) + ", cache " + cachePath);
 }
 
 Project::~Project() {
@@ -160,18 +160,18 @@ Project::~Project() {
 }
 
 Grid Project::GetHexGrid() {
-    ASSERT(dll != NULL, "project " + path + " already destroyed");
+    CHECK(dll != NULL, "project " + path + " already destroyed");
 
     int nxyz[3] = { 0 };
     auto getMeshInfo = (CST_GetHexMeshInfo_PTR) dll->getProc("CST_GetHexMeshInfo");
     auto ret = getMeshInfo ? getMeshInfo(&handle, nxyz) : -1;
-    ASSERT(ret == 0, "GetHexMeshInfo Error: " + to_string(ret));
+    CHECK(ret == 0, "GetHexMeshInfo Error: " + to_string(ret));
 
     int nx = nxyz[0], ny = nxyz[1], nz = nxyz[2], sz = nx + ny + nz;
     auto array = vector<double>(sz);
     auto getHexMesh = (CST_GetHexMesh_PTR) dll->getProc("CST_GetHexMesh");
     ret = getHexMesh ? getHexMesh(&handle, array.data()) : -1;
-    ASSERT(ret == 0, "GetHexMesh Error: " + to_string(ret));
+    CHECK(ret == 0, "GetHexMesh Error: " + to_string(ret));
 
     auto xs = vector<double>(nx);
     for (int i = 0; i < nx; i ++) {
@@ -189,18 +189,18 @@ Grid Project::GetHexGrid() {
 }
 
 float *Project::GetMatrix(int mat) {
-    ASSERT(dll != NULL, "project " + path + " already destroyed");
+    CHECK(dll != NULL, "project " + path + " already destroyed");
 
     int nxyz[3] = { 0 };
     auto getMeshInfo = (CST_GetHexMeshInfo_PTR) dll->getProc("CST_GetHexMeshInfo");
     auto ret = getMeshInfo ? getMeshInfo(&handle, nxyz) : -1;
-    ASSERT(ret == 0, "GetHexMeshInfo Error: " + to_string(ret));
+    CHECK(ret == 0, "GetHexMeshInfo Error: " + to_string(ret));
 
     int nx = nxyz[0], ny = nxyz[1], nz = nxyz[2], sz = nx * ny * nz * 3;
     auto array = new float[sz];
     auto getMaterialMatrix = (CST_GetMaterialMatrixHexMesh_PTR) dll->getProc("CST_GetMaterialMatrixHexMesh");
     ret = getMaterialMatrix ? getMaterialMatrix(&handle, mat, array) : -1;
-    ASSERT(ret == 0, "GetMaterialMatrix Error: " + to_string(ret));
+    CHECK(ret == 0, "GetMaterialMatrix Error: " + to_string(ret));
 
     if (mat == 101) {
         // reorder for mue
@@ -223,19 +223,19 @@ float *Project::GetMatrix(int mat) {
 }
 
 double *Project::Get1DResult(string tree, int num, int type) {
-    ASSERT(dll != NULL, "project " + path + " already destroyed");
+    CHECK(dll != NULL, "project " + path + " already destroyed");
 
     auto getResultSize = (CST_Get1DResultSize_PTR) dll->getProc("CST_Get1DResultSize");
     int size = 0;
     auto ret = getResultSize ? getResultSize(&handle, tree.c_str(), num, &size) : -1;
-    ASSERT(ret == 0, "Get1DResultSize Error: " + to_string(ret));
+    CHECK(ret == 0, "Get1DResultSize Error: " + to_string(ret));
 
     auto getResultData = type == 0 ?
         (CST_Get1DRealDataAbszissa_PTR) dll->getProc("CST_Get1DRealDataAbszissa") :
         (CST_Get1DRealDataOrdinate_PTR) dll->getProc("CST_Get1DRealDataOrdinate");
     auto array = new double[size];
     ret = getResultData ? getResultData(&handle, tree.c_str(), num, array) : -1;
-    ASSERT(ret == 0, "Get1DResultData Error: " + to_string(ret));
+    CHECK(ret == 0, "Get1DResultData Error: " + to_string(ret));
 
     return array;
 }

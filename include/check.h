@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <string>
 
-#ifndef TOOL_H
-#define TOOL_H
+#ifndef CHECK_H
+#define CHECK_H
 
-#define ASSERT(ok, msg) do { if (!(ok)) _panic(msg, __FILE__, __LINE__); } while (0);
+#define CHECK(ok, msg) do { if (!(ok)) _panic(msg, __FILE__, __LINE__); } while (0);
 inline void _panic(std::string msg, const char *file, int line)
 {
     auto m = "FATAL: " + msg + " at " + file + ":" + std::to_string(line) + "\n";
