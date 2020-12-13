@@ -22,6 +22,14 @@ string utils::random(const int len) {
     return tmp_s;
 }
 
+void utils::outputProgress(double percentage) {
+    int val = (int) (percentage * 100);
+    int lpad = (int) (percentage * PBWIDTH);
+    int rpad = PBWIDTH - lpad;
+    printf("\r%3d%% [%.*s%*s]", val, lpad, PBSTR, rpad, "");
+    fflush(stdout);
+}
+
 // https://stackoverflow.com/questions/2573834/c-convert-string-or-char-to-wstring-or-wchar-t
 wstring utils::utf8ToWstring(const string& str) {
     wstring_convert<codecvt_utf8<wchar_t>> myconv;

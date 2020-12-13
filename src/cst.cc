@@ -185,7 +185,7 @@ Grid Project::GetHexGrid() {
     for (int i = 0; i < nz; i ++) {
         zs[i] = array[i + nx + ny];
     }
-    return Grid { xs, ys, zs };
+    return Grid(xs, ys, zs);
 }
 
 float *Project::GetMatrix(int mat) {

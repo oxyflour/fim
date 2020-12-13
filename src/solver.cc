@@ -1,4 +1,5 @@
 #include <regex>
+#include <iostream>
 #include <fstream>
 #include <filesystem>
 
@@ -10,6 +11,79 @@ using namespace std;
 using namespace fit;
 using namespace grid;
 using namespace solver;
+
+Solver::Solver(Matrix &mats, float dt, vector<Port> &ports) {
+    coe = new Coefficient(mats, dt);
+    for (auto &port : ports) {
+        coe->Add(port);
+    }
+}
+
+Solver::~Solver() {
+    delete coe;
+}
+
+float Solver::Step(float s) {
+    CHECK(FALSE, "step method of base solver should not be called");
+    return s;
+}
+
+CPUSolver::CPUSolver(Matrix &mats, float dt, vector<Port> &ports) : Solver(mats, dt, ports) {
+    grid = mats.grid;
+
+    CHECK(ports.size() == 1, "only one port supported");
+    idx = ports[0].idx;
+    dir = ports[0].dir;
+
+    auto nvar = grid->nvar, nxyz = grid->nxyz;
+    E = new float[nvar]; fill(E, E + nvar, 0.f);
+    H = new float[nvar]; fill(H, H + nvar, 0.f);
+    Ex = E; Ey = Ex + nxyz; Ez = Ey + nxyz;
+    Hx = H; Hy = Hx + nxyz; Hz = Hy + nxyz;
+    LEx = coe->le; LEy = LEx + nxyz; LEz = LEy + nxyz; REx = coe->re; REy = REx + nxyz; REz = REy + nxyz;
+    LHx = coe->lh; LHy = LHx + nxyz; LHz = LHy + nxyz; RHx = coe->rh; RHy = RHx + nxyz; RHz = RHy + nxyz;
+}
+
+float CPUSolver::Step(float s) {
+    auto get_idx = [&](int i, int j, int k){ return grid->GetIndex(i, j, k, 0); };
+    auto SG = idx, SD = dir;
+
+    for (int i = 1; i < grid->nx - 1; i ++) {
+        for (int j = 1; j < grid->ny - 1; j ++) {
+            for (int k = 1; k < grid->nz - 1; k ++) {
+                auto g = get_idx(i, j, k);
+                Hx[g] = LHx[g] * Hx[g] - RHx[g] * (Ey[get_idx(i+1, j, k)] - Ey[get_idx(i+1, j, k+1)] - Ez[get_idx(i+1, j, k)] + Ez[get_idx(i+1, j+1, k)]);
+                Hy[g] = LHy[g] * Hy[g] - RHy[g] * (Ez[get_idx(i, j+1, k)] - Ez[get_idx(i+1, j+1, k)] - Ex[get_idx(i, j+1, k)] + Ex[get_idx(i, j+1, k+1)]);
+                Hz[g] = LHz[g] * Hz[g] - RHz[g] * (Ex[get_idx(i, j, k+1)] - Ex[get_idx(i, j+1, k+1)] - Ey[get_idx(i, j, k+1)] + Ey[get_idx(i+1, j, k+1)]);
+            }
+        }
+    }
+
+    float p = 0;
+    for (int i = 1; i < grid->nx - 1; i ++) {
+        for (int j = 1; j < grid->ny - 1; j ++) {
+            for (int k = 1; k < grid->nz - 1; k ++) {
+                auto g = get_idx(i, j, k);
+                float sx = 0, sy = 0, sz = 0;
+                if (g == SG) {
+                    SD == 0 ? (sx = s) : SD == 1 ? (sy = s) : (sz = s);
+                }
+                Ex[g] = LEx[g] * Ex[g] + REx[g] * (Hy[get_idx(i, j-1, k-1)] - Hy[get_idx(i, j-1, k)] - Hz[get_idx(i, j-1, k-1)] + Hz[get_idx(i, j, k-1)] + sx);
+                Ey[g] = LEy[g] * Ey[g] + REy[g] * (Hz[get_idx(i-1, j, k-1)] - Hz[get_idx(i, j, k-1)] - Hx[get_idx(i-1, j, k-1)] + Hx[get_idx(i-1, j, k)] + sy);
+                Ez[g] = LEz[g] * Ez[g] + REz[g] * (Hx[get_idx(i-1, j-1, k)] - Hx[get_idx(i-1, j, k)] - Hy[get_idx(i-1, j-1, k)] + Hy[get_idx(i, j-1, k)] + sz);
+                if (g == SG) {
+                    p = SD == 0 ? Ex[g] : SD == 1 ? Ey[g] : Ez[g];
+                }
+            }
+        }
+    }
+    return p;
+}
+
+CPUSolver::~CPUSolver() {
+    delete E;
+    delete H;
+}
 
 static auto Compile(Grid &grid, Port &port) {
     auto source = string(SRC_CHUNK_CU);
@@ -41,12 +115,7 @@ static auto Compile(Grid &grid, Port &port) {
     return new utils::DLL(dll);
 }
 
-Solver::Solver(Matrix &mats, float dt, vector<Port> &ports) {
-    coe = new Coefficient(mats, dt);
-    for (auto &port : ports) {
-        coe->Add(port);
-    }
-
+GPUSolver::GPUSolver(Matrix &mats, float dt, vector<Port> &ports) : Solver(mats, dt, ports) {
     auto &grid = *mats.grid;
     CHECK(ports.size() == 1, "FIXME: only one port supported");
     dll = Compile(grid, ports[0]);
@@ -54,62 +123,16 @@ Solver::Solver(Matrix &mats, float dt, vector<Port> &ports) {
     FnStep = (decltype(FnStep)) dll->getProc("step_0");
     FnQuit = (decltype(FnQuit)) dll->getProc("step_0");
     CHECK(FnInit && FnStep && FnQuit, "get function failed");
-
     CHECK(FnInit(coe) == 0, "solver init failed");
-
-    auto nvar = grid.xs.size() * grid.ys.size() * grid.zs.size() * 3;
-    E = new float[nvar]; fill(E, E + nvar, 0);
-    H = new float[nvar]; fill(H, H + nvar, 0);
 }
 
-Solver::~Solver() {
-    FnQuit();
+GPUSolver::~GPUSolver() {
+    CHECK(FnQuit() == 0, "solver cleanup failed");
     auto path = dll->path;
     delete dll;
-    delete coe;
     filesystem::remove_all(filesystem::path(path).parent_path());
 }
 
-float Solver::Step(float s) {
-    auto grid = coe->grid;
-    auto nx = grid->xs.size(), ny = grid->ys.size(), nz = grid->zs.size(), nxyz = nx * ny * nz;
-    auto Hx = H, Hy = Hx + nxyz, Hz = Hy + nxyz,
-        Ex = E, Ey = Ex + nxyz, Ez = Ey + nxyz,
-        LHx = coe->le, LHy = LHx + nxyz, LHz = LHy + nxyz,
-        RHx = coe->re, RHy = RHx + nxyz, RHz = RHy + nxyz,
-        LEx = coe->lh, LEy = LEx + nxyz, LEz = LEy + nxyz,
-        REx = coe->rh, REy = REx + nxyz, REz = REy + nxyz;
-    auto get_idx = [=](int i, int j, int k){ return i + j * nx + k * nx * ny; };
-    auto SG = coe->ports[0].idx, SD = coe->ports[0].dir;
-
-    for (int i = 1; i < nx - 1; i ++) {
-        for (int j = 1; j < ny - 1; j ++) {
-            for (int k = 1; k < nz - 1; k ++) {
-                auto g = get_idx(i, j, k);
-                Hx[g] = LHx[g] * Hx[g] + RHx[g] * (Ey[get_idx(i+1, j, k)] - Ey[get_idx(i+1, j, k+1)] - Ez[get_idx(i+1, j, k)] + Ez[get_idx(i+1, j+1, k)]);
-                Hy[g] = LHy[g] * Hy[g] + RHy[g] * (Ez[get_idx(i, j+1, k)] - Ez[get_idx(i+1, j+1, k)] - Ex[get_idx(i, j+1, k)] + Ex[get_idx(i, j+1, k+1)]);
-                Hz[g] = LHz[g] * Hz[g] + RHz[g] * (Ex[get_idx(i, j, k+1)] - Ex[get_idx(i, j+1, k+1)] - Ey[get_idx(i, j, k+1)] + Ey[get_idx(i+1, j, k+1)]);
-            }
-        }
-    }
-    float out;
-    for (int i = 1; i < nx - 1; i ++) {
-        for (int j = 1; j < ny - 1; j ++) {
-            for (int k = 1; k < nz - 1; k ++) {
-                auto g = get_idx(i, j, k);
-                float sx = 0, sy = 0, sz = 0;
-                if (g == SG) {
-                    SD == 0 ? (sx = s) : SD == 1 ? (sy = s) : (sz = s);
-                }
-                Ex[g] = LEx[g] * Ex[g] + REx[g] * (Hy[get_idx(i, j-1, k-1)] - Hy[get_idx(i, j-1, k)] - Hz[get_idx(i, j-1, k-1)] + Hz[get_idx(i, j, k-1)] + sx);
-                Ey[g] = LEy[g] * Ey[g] + REy[g] * (Hz[get_idx(i-1, j, k-1)] - Hz[get_idx(i, j, k-1)] - Hx[get_idx(i-1, j, k-1)] + Hx[get_idx(i-1, j, k)] + sy);
-                Ez[g] = LEz[g] * Ez[g] + REz[g] * (Hx[get_idx(i-1, j-1, k)] - Hx[get_idx(i-1, j, k)] - Hy[get_idx(i-1, j-1, k)] + Hy[get_idx(i, j-1, k)] + sz);
-                if (g == SG) {
-                    out = SD == 0 ? Ex[g] : SD == 1 ? Ey[g] : Ez[g];
-                }
-            }
-        }
-    }
-    return out;
-    //return FnStep(s);
+float GPUSolver::Step(float s) {
+    return FnStep(s);
 }

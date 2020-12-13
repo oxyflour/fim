@@ -7,7 +7,7 @@
 using namespace std;
 
 auto mesh() {
-    auto grid = grid::Grid { utils::range<double>(-5, 5, 1), utils::range<double>(-5, 5, 1), utils::range<double>(-5, 5, 1) };
+    auto grid = grid::Grid(utils::range(-5., 5., 1.), utils::range(-5., 5., 1.), utils::range(-5., 5., 1.));
     occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::sphere(make_float3(0, 0, 0), 3.5));
     //occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::box(float3(-3, -3, -3), float3(3, 3, 3)));
     auto mesher = occ::Mesher(grid, string("E:\\test-sphere.stp"));
@@ -26,18 +26,27 @@ auto solve() {
     auto eps = proj.GetMatrix(100), mue = proj.GetMatrix(101);
     auto mats = fit::Matrix(grid, eps, mue);
     auto port = fit::Port(grid, proj.ports[0]);
-    auto solver = solver::Solver(mats, proj.dt, vector<fit::Port>({ port }));
+    auto cpuSolver = solver::CPUSolver(mats, proj.dt, vector<fit::Port>({ port }));
+    auto gpuSolver = solver::GPUSolver(mats, proj.dt, vector<fit::Port>({ port }));
 
     int steps = 3074;
-    vector<float> sigt(steps), sigs(steps), sigy(steps);
+    vector<float> sigt(steps), sigs(steps), sigy1(steps), sigy2(steps);
     for (auto c : utils::range(steps)) {
-        sigs[c] = utils::interp1(proj.excitation.x, proj.excitation.y, sigt[c] = c * proj.dt);
-    }
-    for (auto c : utils::range(steps)) {
-        sigy[c] = solver.Step(sigs[c]);
+        auto t = sigt[c] = c * proj.dt;
+        sigs[c] = utils::interp1(proj.excitation.x, proj.excitation.y, t) * port.power;
     }
 
-    plt::plot(sigt, sigy);
+    for (auto c : utils::range(steps)) {
+        sigy1[c] = cpuSolver.Step(sigs[c]);
+        sigy2[c] = gpuSolver.Step(sigs[c]);
+        utils::outputProgress((c + 1) * 1. / steps);
+    }
+
+    plt::plot(sigt, sigy1, {{ "label", "cpu" }, { "ls", "-" }});
+    plt::plot(sigt, sigy2, {{ "label", "gpu" }, { "ls", "--" }});
+    plt::xlabel("time (s)");
+    plt::ylabel("voltage (V)");
+    plt::legend();
     plt::show();
 }
 

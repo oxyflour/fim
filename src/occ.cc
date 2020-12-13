@@ -121,12 +121,12 @@ Mesher::Mesher(grid::Grid &grid, string &file, float unit) {
     xmax = bound.xmax; ymax = bound.ymax; zmax = bound.zmax;
 
     auto nxyz = nx * ny * nz;
-    sx.resize(nxyz); std::fill(sx.begin(), sx.end(), 0);
-    sy.resize(nxyz); std::fill(sy.begin(), sy.end(), 0);
-    sz.resize(nxyz); std::fill(sz.begin(), sz.end(), 0);
-    lx.resize(nxyz); std::fill(lx.begin(), lx.end(), 0);
-    ly.resize(nxyz); std::fill(ly.begin(), ly.end(), 0);
-    lz.resize(nxyz); std::fill(lz.begin(), lz.end(), 0);
+    sx.resize(nxyz); std::fill(sx.begin(), sx.end(), 0.f);
+    sy.resize(nxyz); std::fill(sy.begin(), sy.end(), 0.f);
+    sz.resize(nxyz); std::fill(sz.begin(), sz.end(), 0.f);
+    lx.resize(nxyz); std::fill(lx.begin(), lx.end(), 0.f);
+    ly.resize(nxyz); std::fill(ly.begin(), ly.end(), 0.f);
+    lz.resize(nxyz); std::fill(lz.begin(), lz.end(), 0.f);
 
     ctpl::thread_pool pool(thread::hardware_concurrency());
     for (int i = 0; i < nx - 1; i ++) {

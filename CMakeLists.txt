@@ -64,7 +64,7 @@ add_custom_command(
 add_custom_target(
   include_generated
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/tool/gen.cmake
-  DEPENDS src/chunk.cu include/*.h)
+  DEPENDS src/kernel.cu include/*.h)
 
 link_directories(${CMAKE_SOURCE_DIR}/build/occt/occt-7.4/lib)
 include_directories(${CMAKE_JS_INC} "${CMAKE_SOURCE_DIR}/include" "${CUDA_TOOLKIT_ROOT_DIR}/include")

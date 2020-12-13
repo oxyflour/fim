@@ -15,7 +15,7 @@ embed_resource("../tool/run.bas" "${generated_bas}" "SRC_CST_RUN_BAS")
 # https://stackoverflow.com/a/27206982
 set(generated_inc "../include/generated/inc_chunk_cu.h")
 file(WRITE "${generated_inc}" "")
-embed_resource("../src/chunk.cu" "${generated_inc}" "SRC_CHUNK_CU")
+embed_resource("../src/kernel.cu" "${generated_inc}" "SRC_CHUNK_CU")
 file(GLOB inc_list "../include/*.h" "../include/vendor/*.h")
 set(inc_file_list "")
 foreach(inc ${inc_list})

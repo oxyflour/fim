@@ -6,13 +6,28 @@
 using namespace std;
 using namespace grid;
 
+Grid::Grid(vector<double> xs, vector<double> ys, vector<double> zs) {
+    this->xs = xs;
+    this->ys = ys;
+    this->zs = zs;
+    this->nx = xs.size();
+    this->ny = ys.size();
+    this->nz = zs.size();
+    this->nxy = this->nx * this->ny;
+    this->nxyz = this->nx * this->ny * this->nz;
+    this->nvar = this->nxyz * 3;
+}
+
 float3 Grid::At(int3 idx) {
     return float3 { (float) xs[idx.x], (float) ys[idx.y], (float) zs[idx.z] };
 }
 
-int Grid::GetFlatIndex(int3 idx, int dir) {
-    int nx = xs.size(), ny = ys.size(), nz = zs.size();
-    return idx.x + idx.y * nx + idx.z * nx * ny + dir * nx * ny * nz;
+int Grid::GetIndex(int3 idx, int dir) {
+    return GetIndex(idx.x, idx.y, idx.z, dir);
+}
+
+int Grid::GetIndex(int i, int j, int k, int d) {
+    return i + j * nx + k * nxy + d * nxyz;
 }
 
 int3 Grid::FindIndex(float3 pos, float epsi) {

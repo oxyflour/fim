@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "chunk.h"
+#include "kernel.h"
 
 #ifdef _WIN32
 #define DLL_EXPORT __declspec(dllexport)
@@ -49,9 +49,9 @@ public:
         for (auto g = cuIdx(x); g < NXYZ; g += cuDim(x)) {
             get_ijk(g, i, j, k);
             if (i > 0 && j > 0 && k > 0 && i < NX - 1 && j < NY - 1 && k < NZ - 1) {
-                Hx[g] = LHx[g] * Hx[g] + RHx[g] * (Ey[get_idx(i+1, j, k)] - Ey[get_idx(i+1, j, k+1)] - Ez[get_idx(i+1, j, k)] + Ez[get_idx(i+1, j+1, k)]);
-                Hy[g] = LHy[g] * Hy[g] + RHy[g] * (Ez[get_idx(i, j+1, k)] - Ez[get_idx(i+1, j+1, k)] - Ex[get_idx(i, j+1, k)] + Ex[get_idx(i, j+1, k+1)]);
-                Hz[g] = LHz[g] * Hz[g] + RHz[g] * (Ex[get_idx(i, j, k+1)] - Ex[get_idx(i, j+1, k+1)] - Ey[get_idx(i, j, k+1)] + Ey[get_idx(i+1, j, k+1)]);
+                Hx[g] = LHx[g] * Hx[g] - RHx[g] * (Ey[get_idx(i+1, j, k)] - Ey[get_idx(i+1, j, k+1)] - Ez[get_idx(i+1, j, k)] + Ez[get_idx(i+1, j+1, k)]);
+                Hy[g] = LHy[g] * Hy[g] - RHy[g] * (Ez[get_idx(i, j+1, k)] - Ez[get_idx(i+1, j+1, k)] - Ex[get_idx(i, j+1, k)] + Ex[get_idx(i, j+1, k+1)]);
+                Hz[g] = LHz[g] * Hz[g] - RHz[g] * (Ex[get_idx(i, j, k+1)] - Ex[get_idx(i, j+1, k+1)] - Ey[get_idx(i, j, k+1)] + Ey[get_idx(i+1, j, k+1)]);
             }
         }
     }

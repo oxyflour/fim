@@ -13,13 +13,14 @@ namespace fit {
         int idx;
         int dir;
         float imp = 50;
+        float power = 1;
         Port(grid::Grid &grid, cst::port_type &port, float epsi = 1e-6);
     } Port;
 
     typedef struct Matrix {
         grid::Grid *grid;
         float *eps, *mue;
-        Matrix(grid::Grid &grid, float *eps, float *mue) : eps{eps}, mue{mue}, grid{&grid} { };
+        Matrix(grid::Grid &grid, float *eps, float *mue);
     } Matrix;
 
     typedef struct Coefficient {

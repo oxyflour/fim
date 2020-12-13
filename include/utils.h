@@ -28,7 +28,13 @@ typedef void* lib_type;
 typedef void* lib_func;
 #endif
 
+// https://stackoverflow.com/a/36315819
+const auto PBSTR = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
+const auto PBWIDTH = 60;
+
 namespace utils {
+    void outputProgress(double percentage);
+
     std::string random(const int len);
 
     std::wstring utf8ToWstring(const std::string& str);

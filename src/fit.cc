@@ -1,3 +1,4 @@
+#include <iostream>
 #include <fstream>
 
 #include "fit.h"
@@ -13,9 +14,16 @@ Port::Port(Grid &grid, cst::port_type &port, float epsi) {
     pos = grid.ParsePort(src, dst, epsi);
     auto c = pos.size() / 2;
     auto d = pos[c] - pos[c - 1];
-    idx = grid.GetFlatIndex(pos[c - 1], 0);
+    idx = grid.GetIndex(pos[c - 1], 0);
     dir = d.x ? 0 : d.y ? 1 : 2;
+    power = sqrt(4 / imp);
 };
+
+Matrix::Matrix(grid::Grid &grid, float *eps, float *mue) {
+    this->grid = &grid;
+    this->eps = eps;
+    this->mue = mue;
+}
 
 Coefficient::Coefficient(Matrix &mat, float dt) {
     grid = mat.grid;
@@ -54,14 +62,14 @@ void Coefficient::Add(Port &port) {
     auto &pos = port.pos;
     for (int i = 0, len = pos.size(), c = len / 2 - 1; i < len - 1; i ++) {
         auto d = pos[i + 1] - pos[i];
-        auto g = grid->GetFlatIndex(pos[i], d.x ? 0 : d.y ? 1 : 2);
+        auto g = grid->GetIndex(pos[i], d.x ? 0 : d.y ? 1 : 2);
         if (i != c) {
-            le[g] = 1;
-            re[g] = 0;
+            //le[g] = 1;
+            //re[g] = 0;
         } else {
-            auto scale = 1 + re[g] / port.imp;
-            le[g] /= scale;
-            re[g] /= scale;
+            //auto scale = 1 + re[g] / port.imp;
+            //le[g] /= scale;
+            //re[g] /= scale;
         }
     }
     ports.push_back(port);
