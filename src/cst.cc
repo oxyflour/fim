@@ -19,7 +19,7 @@ using namespace grid;
 using namespace cst;
 
 static map<string, utils::DLL*> dllCache;
-static auto getCstDir(string &version) {
+static auto getCstDir(string version) {
     HKEY handle;
     auto key = wstring(L"SOFTWARE\\Wow6432Node\\CST AG\\CST DESIGN ENVIRONMENT\\") + utils::utf8ToWstring(version);
     auto ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, key.c_str(), 0, KEY_READ, &handle);
@@ -31,10 +31,10 @@ static auto getCstDir(string &version) {
     CHECK(ret == ERROR_SUCCESS, "RegQuery INSTALLPATH Error: " + to_string(ret));
     return utils::wstringToUtf8(buf);
 }
-static auto getCstExe(string &cstDir) {
+static auto getCstExe(string cstDir) {
     return cstDir + "AMD64\\CST DESIGN ENVIRONMENT_AMD64.exe";
 }
-static auto getCstDll(string &cstDir) {
+static auto getCstDll(string cstDir) {
     wchar_t cwd[1024] = { 0 };
     DWORD len = sizeof(cwd) / sizeof(wchar_t);
     GetCurrentDirectoryW(len, cwd);
@@ -51,7 +51,7 @@ map<string, float> UNITS = {
     { "ns", 1e-9f },
 };
 
-static auto hashOfFile(string &path) {
+static auto hashOfFile(string path) {
     auto cstFile = ifstream(path, ios::binary);
     vector<unsigned char> hash(picosha2::k_digest_size);
     picosha2::hash256(cstFile, hash.begin(), hash.end());
@@ -133,7 +133,7 @@ string Project::MakeCacheAndLoadSettings(string cstDir) {
     return cstPath.u8string();
 }
 
-Project::Project(string &path, string &version, bool keepCache) {
+Project::Project(string path, string version, bool keepCache) {
     this->path = path;
     this->version = version;
     this->keepCache = keepCache;

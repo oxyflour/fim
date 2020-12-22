@@ -41,7 +41,7 @@ using namespace occ;
 // https://stackoverflow.com/questions/64912439/preventing-opencascade-to-write-to-console
 //Message::DefaultMessenger()->RemovePrinters(STANDARD_TYPE(Message_PrinterOStream));
 
-TopoDS_Shape Step::load(string &file) {
+TopoDS_Shape Step::load(string file) {
     STEPControl_Reader reader;
     auto stat = reader.ReadFile(file.c_str());
     reader.TransferRoot();
@@ -49,7 +49,7 @@ TopoDS_Shape Step::load(string &file) {
     return reader.Shape();
 }
 
-void Step::save(string &file, TopoDS_Shape &shape) {
+void Step::save(string file, TopoDS_Shape &shape) {
     STEPControl_Writer writer;
     auto stat = writer.Transfer(shape, STEPControl_StepModelType::STEPControl_AsIs);
     CHECK(stat == IFSelect_RetDone, "save to file " + file + " failed");
@@ -106,7 +106,7 @@ static auto getSurfaceProps(const TopoDS_Shape &shape) {
     return props;
 }
 
-Mesher::Mesher(grid::Grid &grid, string &file, float unit) {
+Mesher::Mesher(grid::Grid &grid, string file, float unit) {
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
 
     nx = xs.size(); ny = ys.size(); nz = zs.size();
@@ -141,7 +141,7 @@ Mesher::Mesher(grid::Grid &grid, string &file, float unit) {
     for (auto pair : mlx) shapes.push_back(pair.second);
     for (auto pair : mly) shapes.push_back(pair.second);
     for (auto pair : mlz) shapes.push_back(pair.second);
-    Step::save(string("E:\\out.stp"), Builder::component(shapes));
+    Step::save("E:\\out.stp", Builder::component(shapes));
 }
 
 template <typename T> auto intersects(T a0, T a1, T b0, T b1, T tol = 1e-3) {

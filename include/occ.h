@@ -14,8 +14,8 @@ namespace occ {
     } bound_type;
 
     typedef struct Step {
-        static TopoDS_Shape load(std::string &file);
-        static void save(std::string &file, TopoDS_Shape &shape);
+        static TopoDS_Shape load(std::string file);
+        static void save(std::string file, TopoDS_Shape &shape);
     } Step;
 
     typedef struct Bool {
@@ -36,7 +36,7 @@ namespace occ {
     } Shape;
 
     typedef struct Mesher {
-        Mesher(grid::Grid &grid, std::string &file, float unit = 1.f);
+        Mesher(grid::Grid &grid, std::string file, float unit = 1.f);
     private:
         int nx, ny, nz;
         std::vector<double> xs, ys, zs;

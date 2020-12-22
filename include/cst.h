@@ -29,7 +29,7 @@ namespace cst {
     } units_type;
 
     typedef struct Project {
-        Project(std::string &path, std::string &version, bool keepCache = false);
+        Project(std::string path, std::string version, bool keepCache = false);
         ~Project();
 
         grid::Grid GetHexGrid();

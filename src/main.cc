@@ -8,13 +8,13 @@ using namespace std;
 
 auto mesh() {
     auto grid = grid::Grid(utils::range(-5., 5., 1.), utils::range(-5., 5., 1.), utils::range(-5., 5., 1.));
-    occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::sphere(make_float3(0, 0, 0), 3.5));
-    //occ::Step::save(string("E:\\test-sphere.stp"), occ::Builder::box(float3(-3, -3, -3), float3(3, 3, 3)));
-    auto mesher = occ::Mesher(grid, string("E:\\test-sphere.stp"));
+    occ::Step::save("E:\\test-sphere.stp", occ::Builder::sphere(make_float3(0, 0, 0), 3.5));
+    //occ::Step::save("E:\\test-sphere.stp", occ::Builder::box(float3(-3, -3, -3), float3(3, 3, 3)));
+    auto mesher = occ::Mesher(grid, "E:\\test-sphere.stp");
 }
 
 auto solve() {
-    auto proj = cst::Project(string("E:\\Projects\\cst-demo\\dipole-test.cst"), string("2019"), true);
+    auto proj = cst::Project("E:\\Projects\\cst-demo\\dipole-test.cst", "2019", true);
     CHECK(proj.ports.size() == 1, "Only one port supported, got " + to_string(proj.ports.size()));
 
     auto grid = proj.GetHexGrid();
