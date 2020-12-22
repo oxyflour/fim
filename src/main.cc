@@ -26,8 +26,8 @@ auto solve() {
     auto eps = proj.GetMatrix(100), mue = proj.GetMatrix(101);
     auto mats = fit::Matrix(grid, eps, mue);
     auto port = fit::Port(grid, proj.ports[0]);
-    auto cpuSolver = solver::CPUSolver(mats, proj.dt, vector<fit::Port>({ port }));
-    auto gpuSolver = solver::GPUSolver(mats, proj.dt, vector<fit::Port>({ port }));
+    auto cpuSolver = solver::CPUSolver(mats, proj.dt, vector({ port }));
+    auto gpuSolver = solver::GPUSolver(mats, proj.dt, vector({ port }));
 
     int steps = 3074;
     vector<float> sigt(steps), sigs(steps), sigy1(steps), sigy2(steps);
