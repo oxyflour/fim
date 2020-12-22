@@ -8,9 +8,10 @@ using namespace std;
 
 auto mesh() {
     auto grid = grid::Grid(utils::range(-5., 5., 1.), utils::range(-5., 5., 1.), utils::range(-5., 5., 1.));
-    occ::Step::save("E:\\test-sphere.stp", occ::Builder::sphere(make_float3(0, 0, 0), 3.5));
-    //occ::Step::save("E:\\test-sphere.stp", occ::Builder::box(float3(-3, -3, -3), float3(3, 3, 3)));
-    auto mesher = occ::Mesher(grid, "E:\\test-sphere.stp");
+    auto shape = occ::Builder::sphere(make_float3(0, 0, 0), 3.5);
+    //auto shape = occ::Builder::box(make_float3(-3, -3, -3), make_float3(3, 3, 3));
+    auto mesher = occ::Mesher(grid, shape);
+    mesher.Save("E:\\mesh-sphere.stp");
 }
 
 auto solve() {
@@ -52,8 +53,8 @@ auto solve() {
 
 int main() {
     try {
-        solve();
-        //mesh();
+        //solve();
+        mesh();
         return 0;
     } catch (exception &e) {
         cerr << "FATAL: " << e.what() << endl;

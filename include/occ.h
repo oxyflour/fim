@@ -36,7 +36,8 @@ namespace occ {
     } Shape;
 
     typedef struct Mesher {
-        Mesher(grid::Grid &grid, std::string file, float unit = 1.f);
+        Mesher(grid::Grid &grid, TopoDS_Shape &shape, float unit = 1.f);
+        void Save(std::string file);
     private:
         int nx, ny, nz;
         std::vector<double> xs, ys, zs;

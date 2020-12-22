@@ -106,7 +106,7 @@ static auto getSurfaceProps(const TopoDS_Shape &shape) {
     return props;
 }
 
-Mesher::Mesher(grid::Grid &grid, string file, float unit) {
+Mesher::Mesher(grid::Grid &grid, TopoDS_Shape &shape, float unit) {
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
 
     nx = xs.size(); ny = ys.size(); nz = zs.size();
@@ -114,7 +114,7 @@ Mesher::Mesher(grid::Grid &grid, string file, float unit) {
     for (int i = 0; i < ny; i ++) ys[i] /= unit;
     for (int i = 0; i < nz; i ++) zs[i] /= unit;
 
-    shape = Step::load(file);
+    this->shape = TopoDS_Shape(shape);
     faces = Builder::component(Shape::find(shape, TopAbs_FACE));
     auto bound = Shape::bound(shape);
     xmin = bound.xmin; ymin = bound.ymin; zmin = bound.zmin;
@@ -133,7 +133,9 @@ Mesher::Mesher(grid::Grid &grid, string file, float unit) {
         pool.push([&, i](int id) { MeshX(i, i + 1); });
     }
     pool.stop(true);
+}
 
+void Mesher::Save(string file) {
     vector<TopoDS_Shape> shapes;
     for (auto pair : msx) shapes.push_back(pair.second);
     for (auto pair : msy) shapes.push_back(pair.second);
@@ -141,7 +143,7 @@ Mesher::Mesher(grid::Grid &grid, string file, float unit) {
     for (auto pair : mlx) shapes.push_back(pair.second);
     for (auto pair : mly) shapes.push_back(pair.second);
     for (auto pair : mlz) shapes.push_back(pair.second);
-    Step::save("E:\\out.stp", Builder::component(shapes));
+    Step::save(file, Builder::component(shapes));
 }
 
 template <typename T> auto intersects(T a0, T a1, T b0, T b1, T tol = 1e-3) {
