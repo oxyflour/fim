@@ -190,10 +190,13 @@ void calcWireNormal(bound_type &bound, vector<TopoDS_Shape> &faces, int dir) {
                     abs(bound.zmin - zmin) < (zmax - zmin) * 1e-3 &&
                     abs(bound.zmax - zmin) < (zmax - zmin) * 1e-3)) {
                 auto edge = TopoDS::Edge(ed);
+                gp_Pnt2d pt2;
+                gp_Pnt pos;
+                BOPTools_AlgoTools3D::PointNearEdge(edge, face, 0.5, 0, pt2, pos);
                 gp_Dir dir;
                 BOPTools_AlgoTools3D::GetNormalToFaceOnEdge(edge, face, 0.5, dir);
                 // TODO: output
-                //printf("%f, %f, %f / %f, %f, %f\n", xmin, ymin, zmin, dir.X(), dir.Y(), dir.Z());
+                printf("%f, %f, %f / %f, %f, %f\n", pos.X(), pos.Y(), pos.Z(), dir.X(), dir.Y(), dir.Z());
             }
         }
     }
