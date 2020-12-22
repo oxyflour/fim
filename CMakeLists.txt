@@ -53,23 +53,27 @@ if(NOT EXISTS ${filename})
 endif()
 endfunction(download_extract)
 download_extract(
-  https://prebuilt.oss-cn-shanghai.aliyuncs.com/occt-7.4.zip
+  https://prebuilt.oss-cn-shanghai.aliyuncs.com/occt-7.4-with-tbb.zip
   occt)
 
 # generate include/generated/*.h
+# https://stackoverflow.com/questions/2937128/cmake-add-custom-command-not-being-run
+file(GLOB INC_HEADERS "include/*.h")
 add_custom_command(
-  OUTPUT include_generated
+  OUTPUT ${CMAKE_SOURCE_DIR}/include/generated/inc_chunk_cu.h
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/tool/gen.cmake
+  DEPENDS src/kernel.cu INC_HEADERS
 )
 add_custom_target(
   include_generated
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/tool/gen.cmake
-  DEPENDS src/kernel.cu include/*.h)
+  DEPENDS ${CMAKE_SOURCE_DIR}/include/generated/inc_chunk_cu.h
+)
 
 link_directories(${CMAKE_SOURCE_DIR}/build/occt/occt-7.4/lib)
 include_directories(${CMAKE_JS_INC} "${CMAKE_SOURCE_DIR}/include" "${CUDA_TOOLKIT_ROOT_DIR}/include")
 file(GLOB SOURCE_FILES "src/*.cc" "src/**/*.cc")
-add_executable(${PROJECT_NAME} ${SOURCE_FILES} include_generated)
+add_executable(${PROJECT_NAME} ${SOURCE_FILES})
+add_dependencies(${PROJECT_NAME} include_generated)
 
 target_include_directories(${PROJECT_NAME}
   PRIVATE ${threadpool_SOURCE_DIR} ${picosha2_SOURCE_DIR} ${matplotlib_SOURCE_DIR} ${Python3_INCLUDE_DIRS} build/occt/occt-7.4/include)
