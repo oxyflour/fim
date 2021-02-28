@@ -29,12 +29,8 @@ namespace cst {
     } units_type;
 
     typedef struct Project {
-        Project(std::string path, std::string version, bool keepCache = false);
+        Project(std::string path, std::string version, bool useCache = true, bool keepCache = false);
         ~Project();
-
-        grid::Grid GetHexGrid();
-        float *GetMatrix(int mat);
-        double *Get1DResult(std::string tree, int num, int type);
 
         // will be filled by MakeCacheAndLoadSettings
         float dt = -1;
@@ -42,16 +38,26 @@ namespace cst {
         std::vector<solid_type> solids;
         excitation_type excitation;
         units_type units;
+        std::vector<double> xs, ys, zs;
+
+#ifdef USE_CST_DLL
+        grid::Grid GetHexGrid();
+        float *GetMatrix(int mat);
+        double *Get1DResult(std::string tree, int num, int type);
+#endif
 
 private:
         std::string path;
         std::string version;
-        utils::DLL *dll;
         CSTProjHandle handle;
 
         bool keepCache = false;
         std::string cachePath;
-        std::string MakeCacheAndLoadSettings(std::string cst);
+        std::string MakeCacheAndLoadSettings(std::string cst, bool useCache);
+
+#ifdef USE_CST_DLL
+        utils::DLL *dll;
+#endif
     } Project;
 }
 

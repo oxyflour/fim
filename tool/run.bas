@@ -78,6 +78,37 @@ Sub PrintSolids(fn As Integer)
     Next
 End Sub
 
+Sub PrintGrid(fn As Integer)
+    Dim n, i
+    n = Mesh.GetNX()
+    Print #fn, "  ""xs"": ["
+    For i = 0 To n - 1
+        Print #fn, "    " + toStr(Mesh.GetXPos(i))
+        If i < n - 1 Then
+            Print #fn, ","
+        End If
+    Next
+    Print #fn, "  ],"
+    n = Mesh.GetNY()
+    Print #fn, "  ""ys"": ["
+    For i = 0 To n - 1
+        Print #fn, "    " + toStr(Mesh.GetYPos(i))
+        If i < n - 1 Then
+            Print #fn, ","
+        End If
+    Next
+    Print #fn, "  ],"
+    n = Mesh.GetNZ()
+    Print #fn, "  ""zs"": ["
+    For i = 0 To n - 1
+        Print #fn, "    " + toStr(Mesh.GetZPos(i))
+        If i < n - 1 Then
+            Print #fn, ","
+        End If
+    Next
+    Print #fn, "  ]"
+End Sub
+
 Sub Main
     OpenFile(Environ("CST_PATH"))
     Dim fn
@@ -98,6 +129,9 @@ Sub Main
     Print #fn, """solids"": ["
     PrintSolids(fn)
     Print #fn, "],"
+    Print #fn, """grid"": {"
+    PrintGrid(fn)
+    Print #fn, "},"
     Print #fn, """version"": 2019"
     Print #fn, "}"
     Close #fn

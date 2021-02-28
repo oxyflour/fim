@@ -59,7 +59,7 @@ static auto hashOfFile(string path) {
     return picosha2::hash256_hex_string(hash);
 }
 
-string Project::MakeCacheAndLoadSettings(string cstDir) {
+string Project::MakeCacheAndLoadSettings(string cstDir, bool useCache) {
     auto fileHash = hashOfFile(path).substr(0, 16) + "-" + picosha2::hash256_hex_string(path).substr(0, 16);
 
     auto tmpPath = filesystem::temp_directory_path() / ("cst-parser-" + fileHash),
@@ -68,15 +68,15 @@ string Project::MakeCacheAndLoadSettings(string cstDir) {
         jsonPath = tmpPath / "run.json",
         cstPath = tmpPath / "input.cst",
         retPath = tmpPath / "input" / "Result" / "Model.log";
-    if (!filesystem::exists(tmpPath / "ok")) {
+    if (!filesystem::exists(tmpPath / "ok") || !useCache) {
         filesystem::create_directories(tmpPath);
-        filesystem::copy_file(path, cstPath);
+        filesystem::copy_file(path, cstPath, filesystem::copy_options::overwrite_existing);
         utils::writeFile(basPath.u8string(), SRC_CST_RUN_BAS);
 
         _putenv(("CST_PATH=" + cstPath.u8string()).c_str());
         _putenv(("JSON_PATH=" + jsonPath.u8string()).c_str());
         _putenv("EXPORT_SOLIDS=TRUE");
-        _putenv("BUILD_MATRIX=TRUE");
+        // _putenv("BUILD_MATRIX=TRUE");
 
         // https://stackoverflow.com/questions/9964865/c-system-not-working-when-there-are-spaces-in-two-different-parameters
         auto cmd = "\"\"" + getCstExe(cstDir) + "\" -i -m \"" + basPath.u8string() + "\" > \"" + logPath.u8string() + "\" 2>&1\"";
@@ -99,7 +99,7 @@ string Project::MakeCacheAndLoadSettings(string cstDir) {
         }
     }
     retInput.close();
-    CHECK(dt > 0, "cannot get dt from '" + logPath.u8string() + "'");
+    // CHECK(dt > 0, "cannot get dt from '" + logPath.u8string() + "'");
 
     auto meta = json::parse(utils::readFile(jsonPath.u8string()));
     for (auto item : meta["ports"]) {
@@ -118,6 +118,16 @@ string Project::MakeCacheAndLoadSettings(string cstDir) {
     units.time = jUnits["time"].get<float>();
     units.frequency = jUnits["frequency"].get<float>();
 
+    for (auto x : meta["grid"]["xs"]) {
+        xs.push_back(x.get<double>());
+    }
+    for (auto y : meta["grid"]["ys"]) {
+        ys.push_back(y.get<double>());
+    }
+    for (auto z : meta["grid"]["zs"]) {
+        zs.push_back(z.get<double>());
+    }
+
     ifstream sourceInput(jsonPath.u8string() + ".excitation.txt");
     string header;
     std::getline(sourceInput, header);
@@ -133,32 +143,37 @@ string Project::MakeCacheAndLoadSettings(string cstDir) {
     return cstPath.u8string();
 }
 
-Project::Project(string path, string version, bool keepCache) {
+Project::Project(string path, string version, bool useCache, bool keepCache) {
     this->path = path;
     this->version = version;
     this->keepCache = keepCache;
 
     auto cstDir = getCstDir(version);
+    cachePath = MakeCacheAndLoadSettings(cstDir, useCache);
+
+#ifdef USE_CST_DLL
     if (dllCache.count(version) == 0) {
         dllCache[version] = getCstDll(cstDir);
     }
     dll = dllCache[version];
-
-    cachePath = MakeCacheAndLoadSettings(cstDir);
     auto OpenProject = (CST_OpenProject_PTR) dll->getProc("CST_OpenProject");
     auto ret = OpenProject ? OpenProject(cachePath.c_str(), &handle) : -1;
     CHECK(ret == 0, "Open CST project '" + path + "' failed with code " + to_string(ret) + ", cache " + cachePath);
+#endif
 }
 
 Project::~Project() {
-    auto CloseProject = (CST_CloseProject_PTR) dll->getProc("CST_CloseProject");
-    CloseProject(&handle);
-    dll = NULL;
     if (!keepCache) {
         filesystem::remove_all(filesystem::path(cachePath).parent_path());
     }
+#ifdef USE_CST_DLL
+    auto CloseProject = (CST_CloseProject_PTR) dll->getProc("CST_CloseProject");
+    CloseProject(&handle);
+    dll = NULL;
+#endif
 }
 
+#ifdef USE_CST_DLL
 Grid Project::GetHexGrid() {
     CHECK(dll != NULL, "project " + path + " already destroyed");
 
@@ -239,3 +254,4 @@ double *Project::Get1DResult(string tree, int num, int type) {
 
     return array;
 }
+#endif

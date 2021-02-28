@@ -15,11 +15,12 @@ auto mesh() {
 }
 
 auto solve() {
-    auto proj = cst::Project("E:\\Projects\\cst-demo\\dipole-test.cst", "2019", true);
+    auto proj = cst::Project("C:\\Projects\\fim-example.cst", "2019", false, true);
     CHECK(proj.ports.size() == 1, "Only one port supported, got " + to_string(proj.ports.size()));
 
-    auto grid = proj.GetHexGrid();
+    auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
+/*
 
     CHECK(proj.dt > 0, "cannot get dt from project");
     cout << "INFO: dt = " << proj.dt * 1e9 << " ns" << endl;
@@ -49,12 +50,13 @@ auto solve() {
     plt::ylabel("voltage (V)");
     plt::legend();
     plt::show();
+ */
 }
 
 int main() {
     try {
-        //solve();
-        mesh();
+        solve();
+        //mesh();
         return 0;
     } catch (exception &e) {
         cerr << "FATAL: " << e.what() << endl;
