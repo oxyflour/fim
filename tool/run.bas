@@ -82,30 +82,30 @@ Sub PrintSolids(fn As Integer)
 End Sub
 
 Sub PrintGrid(fn As Integer)
-    Dim n, i
-    n = Mesh.GetNX()
+    Dim nx, ny, nz, i
+    nx = Mesh.GetNX()
     Print #fn, "  ""xs"": ["
-    For i = 0 To n - 1
+    For i = 0 To nx - 1
         Print #fn, "    " + toStr(Mesh.GetXPos(i))
-        If i < n - 1 Then
+        If i < nx - 1 Then
             Print #fn, ","
         End If
     Next
     Print #fn, "  ],"
-    n = Mesh.GetNY()
+    ny = Mesh.GetNY()
     Print #fn, "  ""ys"": ["
-    For i = 0 To n - 1
-        Print #fn, "    " + toStr(Mesh.GetYPos(i))
-        If i < n - 1 Then
+    For i = 0 To ny - 1
+        Print #fn, "    " + toStr(Mesh.GetYPos(nx * i))
+        If i < ny - 1 Then
             Print #fn, ","
         End If
     Next
     Print #fn, "  ],"
-    n = Mesh.GetNZ()
+    nz = Mesh.GetNZ()
     Print #fn, "  ""zs"": ["
-    For i = 0 To n - 1
-        Print #fn, "    " + toStr(Mesh.GetZPos(i))
-        If i < n - 1 Then
+    For i = 0 To nz - 1
+        Print #fn, "    " + toStr(Mesh.GetZPos(i * nx * ny))
+        If i < nz - 1 Then
             Print #fn, ","
         End If
     Next

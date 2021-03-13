@@ -31,9 +31,11 @@ namespace stl {
 
     struct Mesher {
         Mesher(grid::Grid &grid, Mesh &mesh);
+        ~Mesher();
     private:
-        void SplitX(Mesh &mesh, int i, double x);
+        void SplitX(Mesh &mesh, int i);
         std::vector<double> xs, ys, zs;
+        double3 min, max;
 
         double3 *vertices, *normals;
         int3 *faces;

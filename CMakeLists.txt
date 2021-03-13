@@ -84,6 +84,7 @@ cuda_add_executable(${PROJECT_NAME} ${SOURCE_FILES} "src/stl.cu" OPTIONS
   -D_DEBUG
   -Xcompiler "/wd4819,/MDd"
 )
+add_dependencies(${PROJECT_NAME} include_generated)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
   ${threadpool_SOURCE_DIR}

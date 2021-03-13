@@ -335,10 +335,14 @@ auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
     return ret;
 }
 
-auto make_poly(Loop &loop) {
+auto make_poly(Loop &loop, int dir) {
     Polygon poly;
     for (auto &pt : loop.pts) {
-        bg::append(poly, Point { pt.y * 100, pt.z * 100 });
+        auto pos =
+            dir == 0 ? Point { pt.y, pt.z } :
+            dir == 1 ? Point { pt.z, pt.x } :
+                       Point { pt.x, pt.y };
+        bg::append(poly, pos);
     }
     bg::correct(poly);
     return poly;
@@ -362,7 +366,8 @@ template <typename T> auto operator*(MultiPolygon &shape, T &poly) {
     return input;
 }
 
-void stl::Mesher::SplitX(Mesh &mesh, int i, double x) {
+void stl::Mesher::SplitX(Mesh &mesh, int i) {
+    auto x = xs[i];
     auto bucket = malloc_device<int>(faceNum);
     auto idx = malloc_device<int>(1);
     auto splited = malloc_device<Splited>(faceNum);
@@ -373,6 +378,9 @@ void stl::Mesher::SplitX(Mesh &mesh, int i, double x) {
     CU_ASSERT(cudaGetLastError());
     from_device(idx, 1, &bucketLen);
     if (bucketLen == 0) {
+        cudaFree(bucket);
+        cudaFree(idx);
+        cudaFree(splited);
         return;
     }
 
@@ -384,35 +392,55 @@ void stl::Mesher::SplitX(Mesh &mesh, int i, double x) {
     auto splitedArr = new Splited[faceNum];
     from_device(splited, bucketLen, splitedArr);
     auto loops = get_loops(mesh, splitedArr, bucketLen, DIR_X);
-    /*
-    for (int m = 0; m < loops.size(); m ++) {
-        save_loop("loop" + to_string(i) + "-n" + to_string(m) + ".stl", loops[m], double3 { 0.01, 0, 0 });
-    }
-     */
+
+    delete splitedArr;
+    cudaFree(bucket);
+    cudaFree(idx);
+    cudaFree(splited);
+
     MultiPolygon shape;
     for (auto &loop : loops) {
         if (!loop.hole) {
-            shape = shape + make_poly(loop);
+            shape = shape + make_poly(loop, DIR_X);
         }
     }
     for (auto &loop : loops) {
         if (loop.hole) {
-            shape = shape - make_poly(loop);
+            shape = shape - make_poly(loop, DIR_X);
         }
     }
 
-    //shape = shape * Box(Point { 0, 0 }, Point { 300, 300 });
+    MultiPolygon result;
+    for (int j = 0; j < ys.size() - 1; j ++) {
+        auto stride = shape * Box({ ys[j] - tol, min.z }, { ys[j + 1], max.z });
+        for (int k = 0; k < zs.size() - 1; k ++) {
+            auto patch = stride * Box({ min.y, zs[k] - tol }, { max.y, zs[k + 1] });
+            for (auto &poly : patch) {
+                result.push_back(poly);
+            }
+        }
+    }
 
     ofstream fn("svg" + to_string(i) + ".svg");
-    bg::svg_mapper<Point> mapper(fn, 500, 500);
-    mapper.add(shape);
-    mapper.map(shape, "fill:black;stroke:blue");
-
-    cout << "loop " << i << " at " << x << " loop " << loops.size() << endl;
+    bg::svg_mapper<Point> map(fn, 500, 500);
+    map.add(result);
+    map.map(result, "fill:blue;stroke:black");
+    cout << "svg" + to_string(i) + ".svg" << endl;
 }
 
 stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
+    tol = 1e-5;
+    min = mesh.min; max = mesh.max;
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
+    for (int i = 0; i < xs.size(); i ++) {
+        xs[i] = (round(xs[i] / tol) + 0.5) * tol;
+    }
+    for (int j = 0; j < ys.size(); j ++) {
+        ys[j] = (round(ys[j] / tol) + 0.5) * tol;
+    }
+    for (int k = 0; k < zs.size(); k ++) {
+        zs[k] = (round(zs[k] / tol) + 0.5) * tol;
+    }
 
     faces = to_device(mesh.faces.data(), mesh.faces.size());
     faceNum = mesh.faces.size();
@@ -421,7 +449,6 @@ stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
     normals = malloc_device<double3>(faceNum);
     bounds = malloc_device<Bound>(faceNum);
 
-    tol = 1e-5;
     kernel_round CU_DIM(256, 128) (vertices, vertNum, tol);
     CU_ASSERT(cudaGetLastError());
 
@@ -432,8 +459,14 @@ stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
     from_device(normals, faceNum, mesh.normals.data());
     from_device(bounds, faceNum, mesh.bounds.data());
 
-    for (int i = 0; i < grid.xs.size(); i ++) {
-        auto x = (round(grid.xs[i] / tol) + 0.5) * tol;
-        SplitX(mesh, i, x);
+    for (int i = 0; i < xs.size(); i ++) {
+        SplitX(mesh, i);
     }
+}
+
+stl::Mesher::~Mesher() {
+    cudaFree(faces);
+    cudaFree(vertices);
+    cudaFree(normals);
+    cudaFree(bounds);
 }
