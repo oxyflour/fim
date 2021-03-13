@@ -1,23 +1,12 @@
 #include "stl.h"
+#include "ctpl_stl.h"
 
 #include <fstream>
 #include <iostream>
 #include <map>
 
-#undef __CUDACC__
-#include <boost/geometry.hpp>
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/polygon.hpp>
-#include <boost/geometry/geometries/multi_polygon.hpp>
-
 using namespace std;
 using namespace stl;
-
-namespace bg = boost::geometry;
-typedef bg::model::d2::point_xy<double> Point;
-typedef bg::model::polygon<Point> Polygon;
-typedef bg::model::multi_polygon<Polygon> MultiPolygon;
-typedef bg::model::box<Point> Box;
 
 inline __host__ __device__ double fmin(double a, double b) {
     return a < b ? a : b;
@@ -410,35 +399,30 @@ void stl::Mesher::SplitX(Mesh &mesh, int i) {
         }
     }
 
-    MultiPolygon result;
-    for (int j = 0; j < ys.size() - 1; j ++) {
+    for (int j = 0; j < ny - 1; j ++) {
         auto stride = shape * Box({ ys[j] - tol, min.z }, { ys[j + 1], max.z });
-        for (int k = 0; k < zs.size() - 1; k ++) {
+        for (int k = 0; k < nz - 1; k ++) {
             auto patch = stride * Box({ min.y, zs[k] - tol }, { max.y, zs[k + 1] });
-            for (auto &poly : patch) {
-                result.push_back(poly);
+            if (patch.size()) {
+                lock_guard<mutex> guard(lock);
+                sx[i + j * nx + k * nx * ny] = patch;
             }
         }
     }
-
-    ofstream fn("svg" + to_string(i) + ".svg");
-    bg::svg_mapper<Point> map(fn, 500, 500);
-    map.add(result);
-    map.map(result, "fill:blue;stroke:black");
-    cout << "svg" + to_string(i) + ".svg" << endl;
 }
 
 stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
     tol = 1e-5;
     min = mesh.min; max = mesh.max;
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
-    for (int i = 0; i < xs.size(); i ++) {
+    nx = grid.nx; ny = grid.ny; nz = grid.nz;
+    for (int i = 0; i < nx; i ++) {
         xs[i] = (round(xs[i] / tol) + 0.5) * tol;
     }
-    for (int j = 0; j < ys.size(); j ++) {
+    for (int j = 0; j < ny; j ++) {
         ys[j] = (round(ys[j] / tol) + 0.5) * tol;
     }
-    for (int k = 0; k < zs.size(); k ++) {
+    for (int k = 0; k < nz; k ++) {
         zs[k] = (round(zs[k] / tol) + 0.5) * tol;
     }
 
@@ -459,9 +443,11 @@ stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
     from_device(normals, faceNum, mesh.normals.data());
     from_device(bounds, faceNum, mesh.bounds.data());
 
-    for (int i = 0; i < xs.size(); i ++) {
-        SplitX(mesh, i);
+    ctpl::thread_pool pool(thread::hardware_concurrency());
+    for (int i = 0; i < nx; i ++) {
+        pool.push([&, i](int id) { SplitX(mesh, i); });
     }
+    pool.stop(true);
 }
 
 stl::Mesher::~Mesher() {
