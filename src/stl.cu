@@ -335,7 +335,7 @@ auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
     return ret;
 }
 
-auto makePoly (Loop &loop) {
+auto make_poly(Loop &loop) {
     Polygon poly;
     for (auto &pt : loop.pts) {
         bg::append(poly, Point { pt.y * 100, pt.z * 100 });
@@ -392,12 +392,12 @@ void stl::Mesher::SplitX(Mesh &mesh, int i, double x) {
     MultiPolygon shape;
     for (auto &loop : loops) {
         if (!loop.hole) {
-            shape = shape + makePoly(loop);
+            shape = shape + make_poly(loop);
         }
     }
     for (auto &loop : loops) {
         if (loop.hole) {
-            shape = shape - makePoly(loop);
+            shape = shape - make_poly(loop);
         }
     }
 
