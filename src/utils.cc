@@ -5,7 +5,7 @@
 
 #include "cuda.h"
 #include "utils.h"
-#include "check.h"
+#include "utils/check.h"
 
 using namespace std;
 

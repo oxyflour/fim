@@ -17,6 +17,7 @@ dim3 gridDim;
 #define CU_DIM_MEM(grid, block, bytes)
 #define CU_DIM_MEM_STREAM(grid, block, bytes, stream)
 extern void __syncthreads();
+extern int atomicAdd(int* address, int val);
 #else
 #define CU_DIM(grid, block) <<<grid, block>>>
 #define CU_DIM_MEM(grid, block, bytes) <<<grid, block, bytes>>>
@@ -45,10 +46,11 @@ template <typename T> T *malloc_device(size_t sz) {
     return out;
 }
 
-template <typename T> T *to_device(const T *in, size_t sz) {
-    T* out = NULL;
-    if (sz > 0) {
+template <typename T> T *to_device(const T *in, size_t sz, T *out = NULL) {
+    if (out == NULL) {
         CU_ASSERT(cudaMalloc(&out, sizeof(T) * sz));
+    }
+    if (sz > 0) {
         CU_ASSERT(cudaMemcpy(out, in, sizeof(T) * sz, cudaMemcpyDefault));
     }
     return out;

@@ -1,8 +1,10 @@
+#include "utils/check.h"
+#include "utils/plt.h"
+
 #include "cst.h"
 #include "solver.h"
 #include "occ.h"
-#include "plt.h"
-#include "check.h"
+#include "stl.h"
 
 using namespace std;
 
@@ -15,11 +17,16 @@ auto mesh() {
 }
 
 auto solve() {
-    auto proj = cst::Project("C:\\Projects\\fim-example.cst", "2019", false, true);
-    CHECK(proj.ports.size() == 1, "Only one port supported, got " + to_string(proj.ports.size()));
+    auto proj = cst::Project("C:\\Projects\\fim-cylinder.cst", "2019", true, true);
+    //CHECK(proj.ports.size() == 1, "Only one port supported, got " + to_string(proj.ports.size()));
 
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
+
+    for (auto &solid : proj.solids) {
+        auto mesh = stl::load(solid.stl);
+        stl::Mesher(grid, mesh);
+    }
 /*
 
     CHECK(proj.dt > 0, "cannot get dt from project");

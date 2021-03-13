@@ -11,7 +11,7 @@
 #include "cuda.h"
 #include "cst.h"
 #include "utils.h"
-#include "check.h"
+#include "utils/check.h"
 
 using json = nlohmann::json;
 using namespace std;
@@ -110,8 +110,9 @@ string Project::MakeCacheAndLoadSettings(string cstDir, bool useCache) {
     }
     for (auto item : meta["solids"]) {
         auto name = item["name"].get<string>(),
-            material = item["material"].get<string>();
-        solids.push_back(solid_type { name, material });
+            material = item["material"].get<string>(),
+            stl = item["stl"].get<string>();
+        solids.push_back(solid_type { name, material, stl });
     }
     auto jUnits = meta["units"];
     units.geometry = jUnits["geometry"].get<float>();

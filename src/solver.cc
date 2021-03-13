@@ -5,7 +5,7 @@
 
 #include "generated/inc_chunk_cu.h"
 #include "solver.h"
-#include "check.h"
+#include "utils/check.h"
 
 using namespace std;
 using namespace fit;

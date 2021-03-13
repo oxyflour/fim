@@ -4,7 +4,7 @@
 #include <windows.h>
 
 #include "vendor/cst.h"
-#include "cuda.h"
+#include "utils/cuda.h"
 #include "utils.h"
 #include "grid.h"
 
@@ -12,23 +12,23 @@
 #define CST_H
 
 namespace cst {
-    typedef struct port_type {
+    struct port_type {
         float3 src, dst;
-    } port_type;
+    };
 
-    typedef struct excitation_type {
+    struct excitation_type {
         std::vector<float> x, y;
-    } excitation_type;
+    };
 
-    typedef struct solid_type {
-        std::string name, material;
-    } solid_type;
+    struct solid_type {
+        std::string name, material, stl;
+    };
 
-    typedef struct units_type {
+    struct units_type {
         float geometry, time, frequency;
-    } units_type;
+    };
 
-    typedef struct Project {
+    struct Project {
         Project(std::string path, std::string version, bool useCache = true, bool keepCache = false);
         ~Project();
 
@@ -58,7 +58,7 @@ private:
 #ifdef USE_CST_DLL
         utils::DLL *dll;
 #endif
-    } Project;
+    };
 }
 
 #endif

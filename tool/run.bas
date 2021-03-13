@@ -58,15 +58,18 @@ Sub PrintSolids(fn As Integer)
             If idx >= 0 Then
                 comp = Left(solidName, idx - 1)
                 shape = Right(solidName, Len(solidName) - idx)
-                file = jsonPath + "." + Cstr(i) + ".stl"
+                file = jsonPath + "." + Cstr(i)
                 With STL
                     .Reset
-                    .FileName(file)
+                    .ExportFileUnits("mm")
+                    .SurfaceTolerance(0.001)
+                    .NormalTolerance(30)
+                    .FileName(file + ".stl")
                     .Component(comp)
                     .Name(shape)
                     .Write
                 End With
-                Print #fn, "    ""stl"": """ + Replace(file, "\", "\\") + ""","
+                Print #fn, "    ""stl"": """ + Replace(file + ".stl", "\", "\\") + ""","
             End If
         End If
         Print #fn, "    ""material"": """ + Solid.GetMaterialNameForShape(solidName) + """"

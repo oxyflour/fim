@@ -8,41 +8,43 @@
 #define OCC_H
 
 namespace occ {
-    typedef struct bound_type {
+    struct bound_type {
         double xmin, ymin, zmin, xmax, ymax, zmax;
         bool intersects(bound_type &bound, double tol);
-    } bound_type;
+    };
 
-    typedef struct Step {
+    struct Step {
         static TopoDS_Shape load(std::string file);
         static void save(std::string file, TopoDS_Shape &shape);
-    } Step;
+    };
 
-    typedef struct Bool {
+    struct Bool {
         static TopoDS_Shape common(const TopoDS_Shape &a, const TopoDS_Shape &b);
-    } Bool;
+    };
 
-    typedef struct Builder {
+    struct Builder {
         static TopoDS_Shape sphere(float3 &position, float radius);
         static TopoDS_Shape box(float3 &min, float3 &max);
         static TopoDS_Shape line(float3 &from, float3 &to);
         static TopoDS_Shape plane(float3 &pos, float3 &dir);
         static TopoDS_Shape component(std::vector<TopoDS_Shape> &shapes);
-    } Builder;
+    };
 
-    typedef struct Shape {
+    struct Shape {
         static bound_type bound(const TopoDS_Shape &shape);
         static std::vector<TopoDS_Shape> find(TopoDS_Shape &shape, TopAbs_ShapeEnum type);
-    } Shape;
+    };
 
-    typedef struct Mesher {
+    struct Mesher {
         Mesher(grid::Grid &grid, TopoDS_Shape &shape, float unit = 1.f);
         void Save(std::string file);
+        static void Merge(grid::Grid &grid, std::vector<Mesher> &mats, std::vector<int> &priority);
+
+        std::vector<float> sx, sy, sz, lx, ly, lz;
+        std::map<int, TopoDS_Shape> msx, msy, msz, mlx, mly, mlz;
     private:
         int nx, ny, nz;
         std::vector<double> xs, ys, zs;
-        std::vector<float> sx, sy, sz, lx, ly, lz;
-        std::map<int, TopoDS_Shape> msx, msy, msz, mlx, mly, mlz;
 
         TopoDS_Shape shape;
         TopoDS_Shape faces;
@@ -52,7 +54,7 @@ namespace occ {
         void MeshX(int i0, int i1);
         void MeshY(int j0, int j1);
         void MeshZ(int k0, int k1);
-    } Mesher;
+    };
 };
 
 #endif

@@ -33,7 +33,7 @@
 #include "cuda.h"
 #include "occ.h"
 #include "utils.h"
-#include "check.h"
+#include "utils/check.h"
 
 using namespace std;
 using namespace occ;
@@ -128,7 +128,7 @@ Mesher::Mesher(grid::Grid &grid, TopoDS_Shape &shape, float unit) {
     ly.resize(nxyz); std::fill(ly.begin(), ly.end(), 0.f);
     lz.resize(nxyz); std::fill(lz.begin(), lz.end(), 0.f);
 
-    ctpl::thread_pool pool(thread::hardware_concurrency());
+    auto pool = ctpl::thread_pool(thread::hardware_concurrency());
     for (int i = 0; i < nx - 1; i ++) {
         pool.push([&, i](int id) { MeshX(i, i + 1); });
     }
@@ -137,13 +137,65 @@ Mesher::Mesher(grid::Grid &grid, TopoDS_Shape &shape, float unit) {
 
 void Mesher::Save(string file) {
     vector<TopoDS_Shape> shapes;
-    for (auto pair : msx) shapes.push_back(pair.second);
-    for (auto pair : msy) shapes.push_back(pair.second);
-    for (auto pair : msz) shapes.push_back(pair.second);
-    for (auto pair : mlx) shapes.push_back(pair.second);
-    for (auto pair : mly) shapes.push_back(pair.second);
-    for (auto pair : mlz) shapes.push_back(pair.second);
+    for (auto [id, shape] : msx) shapes.push_back(shape);
+    for (auto [id, shape] : msy) shapes.push_back(shape);
+    for (auto [id, shape] : msz) shapes.push_back(shape);
+    for (auto [id, shape] : mlx) shapes.push_back(shape);
+    for (auto [id, shape] : mly) shapes.push_back(shape);
+    for (auto [id, shape] : mlz) shapes.push_back(shape);
     Step::save(file, Builder::component(shapes));
+}
+
+const int METAL = 1000;
+
+void MergeCell(grid::Grid &grid, int i, int j, int k,
+        vector<int> &idx, vector<Mesher> &meshers, vector<int> &priority) {
+/*
+    auto n = grid.GetIndex(i, j, k);
+    {
+        auto i = idx[idx.size() - 1];
+        auto &mesher = meshers[i];
+        if (priority[i] > METAL) {
+            if (mesher.sx[n] > 0.999) {
+                // filled with metal
+            }
+            if (mesher.sy[n] > 0.999) {
+                // filled with metal
+            }
+            if (mesher.sz[n] > 0.999) {
+                // filled with metal
+            }
+        }
+    }
+    int lastPriority = 0;
+    auto material = std::map<int, Cell>();
+    for (auto id : idx) {
+        auto &mesher = meshers[id];
+        // merge x
+        if (mesher.msx.count(n)) {
+            if (priority[id] > lastPriority) {
+            } else {
+            }
+        }
+        // merge y
+        // merge z
+        lastPriority = priority[id];
+    }
+ */
+}
+
+void Mesher::Merge(grid::Grid &grid, vector<Mesher> &meshers, vector<int> &priority) {
+    auto idx = utils::range((int) meshers.size());
+    std::sort(idx.begin(), idx.end(), [&](int i, int j) { return priority[i] - priority[j]; });
+
+    auto pool = ctpl::thread_pool(thread::hardware_concurrency());
+    for (int i = 0; i < grid.nx - 1; i ++) {
+        for (int j = 0; j < grid.ny - 1; j ++) {
+            for (int k = 0; k < grid.nz - 1; k ++) {
+                pool.push([&](int id) { MergeCell(grid, i, j, k, idx, meshers, priority); });
+            }
+        }
+    }
 }
 
 template <typename T> auto intersects(T a0, T a1, T b0, T b1, T tol = 1e-3) {
