@@ -97,7 +97,7 @@ struct Conn {
     Edge a, b;
 };
 
-struct LoopPoints {
+struct Ring {
     vector<double3> pts;
     int2 f;
 };
@@ -262,7 +262,7 @@ auto idx_of(int2 &i, int n) {
     return i.x < i.y ? i.x * n + i.y : i.y * n + i.x;
 }
 
-auto get_loops(Mesh &mesh, Splited *splited, int num) {
+auto get_rings(Mesh &mesh, Splited *splited, int num) {
     auto maxVert = mesh.vertices.size() + 1;
     auto conns = map<int, Conn>();
     auto coord = map<int, double3>();
@@ -277,9 +277,9 @@ auto get_loops(Mesh &mesh, Splited *splited, int num) {
         coord[to] = mesh.get(edge.to);
     }
 
-    auto loops = vector<LoopPoints>();
+    auto loops = vector<Ring>();
     while (conns.size()) {
-        auto loop = LoopPoints();
+        auto loop = Ring();
         auto &begin = *conns.begin();
         auto current = begin.first, prev = begin.second.a.i;
         loop.f = { begin.second.a.f, begin.second.b.f };
@@ -308,8 +308,8 @@ auto is_reversed(vector<double3> &pts, int dir) {
     return sum < 0;
 }
 
-auto get_loops_with_dir(Mesh &mesh, Splited *splited, int num, int dir) {
-    auto loops = get_loops(mesh, splited, num);
+auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
+    auto loops = get_rings(mesh, splited, num);
     auto norm =
         dir == 0 ? double3 { 1, 0, 0 } :
         dir == 1 ? double3 { 0, 1, 0 } : double3 { 0, 0, 1 };
@@ -335,15 +335,93 @@ auto get_loops_with_dir(Mesh &mesh, Splited *splited, int num, int dir) {
     return ret;
 }
 
-stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
-    auto faces = to_device(mesh.faces.data(), mesh.faces.size());
-    auto faceNum = mesh.faces.size();
-    auto vertices = to_device(mesh.vertices.data(), mesh.vertices.size());
-    auto vertNum = mesh.vertices.size();
-    auto normals = malloc_device<double3>(faceNum);
-    auto bounds = malloc_device<Bound>(faceNum);
+auto makePoly (Loop &loop) {
+    Polygon poly;
+    for (auto &pt : loop.pts) {
+        bg::append(poly, Point { pt.y * 100, pt.z * 100 });
+    }
+    bg::correct(poly);
+    return poly;
+}
 
-    auto tol = 1e-5;
+template <typename T> auto operator+(MultiPolygon &shape, T &poly) {
+    MultiPolygon input;
+    bg::union_(shape, poly, input);
+    return input;
+}
+
+template <typename T> auto operator-(MultiPolygon &shape, T &poly) {
+    MultiPolygon input;
+    bg::difference(shape, poly, input);
+    return input;
+}
+
+template <typename T> auto operator*(MultiPolygon &shape, T &poly) {
+    MultiPolygon input;
+    bg::intersection(shape, poly, input);
+    return input;
+}
+
+void stl::Mesher::SplitX(Mesh &mesh, int i, double x) {
+    auto bucket = malloc_device<int>(faceNum);
+    auto idx = malloc_device<int>(1);
+    auto splited = malloc_device<Splited>(faceNum);
+
+    int bucketLen = 0;
+    to_device(&bucketLen, 1, idx);
+    kernel_group CU_DIM(256, 128) (vertices, faces, faceNum, bounds, x, DIR_X, bucket, idx);
+    CU_ASSERT(cudaGetLastError());
+    from_device(idx, 1, &bucketLen);
+    if (bucketLen == 0) {
+        return;
+    }
+
+    int splitedLen = 0;
+    to_device(&splitedLen, 1, idx);
+    kernel_split CU_DIM(256, 128) (vertices, faces, bucket, bucketLen, x, DIR_X, splited, idx);
+    CU_ASSERT(cudaGetLastError());
+
+    auto splitedArr = new Splited[faceNum];
+    from_device(splited, bucketLen, splitedArr);
+    auto loops = get_loops(mesh, splitedArr, bucketLen, DIR_X);
+    /*
+    for (int m = 0; m < loops.size(); m ++) {
+        save_loop("loop" + to_string(i) + "-n" + to_string(m) + ".stl", loops[m], double3 { 0.01, 0, 0 });
+    }
+     */
+    MultiPolygon shape;
+    for (auto &loop : loops) {
+        if (!loop.hole) {
+            shape = shape + makePoly(loop);
+        }
+    }
+    for (auto &loop : loops) {
+        if (loop.hole) {
+            shape = shape - makePoly(loop);
+        }
+    }
+
+    //shape = shape * Box(Point { 0, 0 }, Point { 300, 300 });
+
+    ofstream fn("svg" + to_string(i) + ".svg");
+    bg::svg_mapper<Point> mapper(fn, 500, 500);
+    mapper.add(shape);
+    mapper.map(shape, "fill:black;stroke:blue");
+
+    cout << "loop " << i << " at " << x << " loop " << loops.size() << endl;
+}
+
+stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
+    xs = grid.xs; ys = grid.ys; zs = grid.zs;
+
+    faces = to_device(mesh.faces.data(), mesh.faces.size());
+    faceNum = mesh.faces.size();
+    vertices = to_device(mesh.vertices.data(), mesh.vertices.size());
+    vertNum = mesh.vertices.size();
+    normals = malloc_device<double3>(faceNum);
+    bounds = malloc_device<Bound>(faceNum);
+
+    tol = 1e-5;
     kernel_round CU_DIM(256, 128) (vertices, vertNum, tol);
     CU_ASSERT(cudaGetLastError());
 
@@ -354,57 +432,8 @@ stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
     from_device(normals, faceNum, mesh.normals.data());
     from_device(bounds, faceNum, mesh.bounds.data());
 
-    auto bucket = malloc_device<int>(faceNum);
-    auto idx = malloc_device<int>(1);
-    auto splitedArr = new Splited[faceNum];
-    auto splited = malloc_device<Splited>(faceNum);
     for (int i = 0; i < grid.xs.size(); i ++) {
         auto x = (round(grid.xs[i] / tol) + 0.5) * tol;
-
-        int bucketLen = 0;
-        to_device(&bucketLen, 1, idx);
-        kernel_group CU_DIM(256, 128) (vertices, faces, faceNum, bounds, x, DIR_X, bucket, idx);
-        CU_ASSERT(cudaGetLastError());
-        from_device(idx, 1, &bucketLen);
-        if (bucketLen == 0) {
-            continue;
-        }
-
-        int splitedLen = 0;
-        to_device(&splitedLen, 1, idx);
-        kernel_split CU_DIM(256, 128) (vertices, faces, bucket, bucketLen, x, DIR_X, splited, idx);
-        CU_ASSERT(cudaGetLastError());
-
-        from_device(splited, bucketLen, splitedArr);
-        auto loops = get_loops_with_dir(mesh, splitedArr, bucketLen, DIR_X);
-        for (int m = 0; m < loops.size(); m ++) {
-            save_loop("loop" + to_string(i) + "-n" + to_string(m) + ".stl", loops[m], double3 { 0.01, 0, 0 });
-        }
-        /*
-        ofstream fn("svg" + to_string(i) + ".svg");
-        bg::svg_mapper<Point> mapper(fn, 500, 500);
-        MultiPolygon shape;
-        auto makePoly = [](Loop &loop) {
-            Polygon poly;
-            for (auto &pt : loop.pts) {
-                bg::append(poly, Point { pt.y * 100, pt.z * 100 });
-            }
-            return poly;
-        };
-        for (auto &loop : loops) {
-            if (!loop.hole) {
-                bg::union_(shape, makePoly(loop), shape);
-            }
-        }
-        for (auto &loop : loops) {
-            if (loop.hole) {
-                bg::intersection(shape, makePoly(loop), shape);
-            }
-        }
-        mapper.add(shape);
-        mapper.map(shape, "fill:black;stroke:blue");
-         */
-
-        cout << "loop " << i << " at " << x << " loop " << loops.size() << endl;
+        SplitX(mesh, i, x);
     }
 }
