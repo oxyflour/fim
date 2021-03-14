@@ -1,3 +1,5 @@
+#include <ctpl_stl.h>
+
 #include "utils/check.h"
 #include "utils/plt.h"
 
@@ -8,25 +10,31 @@
 
 using namespace std;
 
-auto mesh() {
-    auto grid = grid::Grid(utils::range(-5., 5., 1.), utils::range(-5., 5., 1.), utils::range(-5., 5., 1.));
-    auto shape = occ::Builder::sphere(make_float3(0, 0, 0), 3.5);
-    //auto shape = occ::Builder::box(make_float3(-3, -3, -3), make_float3(3, 3, 3));
-    auto mesher = occ::Mesher(grid, shape);
-    mesher.Save("E:\\mesh-sphere.stp");
-}
-
 auto solve() {
     auto proj = cst::Project("C:\\Projects\\fim-cylinder.cst", "2019", true, true);
-    //CHECK(proj.ports.size() == 1, "Only one port supported, got " + to_string(proj.ports.size()));
-
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
 
+    auto mats = map<string, stl::Fragments>();
+    mutex lock;
+
+    ctpl::thread_pool pool;
     for (auto &solid : proj.solids) {
-        auto mesh = stl::load(solid.stl);
-        stl::Mesher(grid, mesh);
+        pool.push([&] (int id) {
+            auto mesh = stl::load(solid.stl);
+            auto fragments = stl::Spliter(grid, mesh).fragments;
+            {
+                lock_guard guard(lock);
+                if (mats.count(solid.material)) {
+                    mats[solid.material] += fragments;
+                } else {
+                    mats[solid.material] = fragments;
+                }
+            }
+        });
     }
+    pool.stop(true);
+
 /*
 
     CHECK(proj.dt > 0, "cannot get dt from project");
@@ -63,7 +71,6 @@ auto solve() {
 int main() {
     try {
         solve();
-        //mesh();
         return 0;
     } catch (exception &e) {
         cerr << "FATAL: " << e.what() << endl;

@@ -81,6 +81,7 @@ link_directories(${CMAKE_SOURCE_DIR}/build/occt/occt-7.4/lib)
 include_directories(${CMAKE_JS_INC} "${CMAKE_SOURCE_DIR}/include" "${CUDA_TOOLKIT_ROOT_DIR}/include")
 file(GLOB SOURCE_FILES "src/*.cc" "src/**/*.cc")
 cuda_add_executable(${PROJECT_NAME} ${SOURCE_FILES} "src/stl.cu" OPTIONS
+  # TODO: check if debug
   -D_DEBUG
   -Xcompiler "/wd4819,/MDd"
 )

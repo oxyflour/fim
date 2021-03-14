@@ -42,11 +42,15 @@ namespace stl {
     void save(std::string file, Mesh &mesh);
     Mesh load(std::string file, double tol = 1e-6);
 
-    struct Mesher {
-        Mesher(grid::Grid &grid, Mesh &mesh);
-        ~Mesher();
+    struct Fragments {
+        std::map<int, MultiPolygon> x, y, z;
+    };
+
+    struct Spliter {
+        Spliter(grid::Grid &grid, Mesh &mesh);
+        ~Spliter();
+        Fragments fragments;
     private:
-        void SplitX(Mesh &mesh, int i);
         std::vector<double> xs, ys, zs;
         int nx, ny, nz;
         double3 min, max;
@@ -57,10 +61,15 @@ namespace stl {
         int faceNum, vertNum;
 
         std::mutex lock;
-        std::map<int, MultiPolygon> sx, sy, sz;
-
         double tol;
+
+        MultiPolygon Slice(Mesh &mesh, double pos, int dir);
+        void SliceX(Mesh &mesh, int i);
+        void SliceY(Mesh &mesh, int j);
+        void SliceZ(Mesh &mesh, int k);
     };
 }
+
+stl::Fragments& operator+=(stl::Fragments &a, stl::Fragments &b);
 
 #endif

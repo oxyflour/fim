@@ -355,63 +355,134 @@ template <typename T> auto operator*(MultiPolygon &shape, T &poly) {
     return input;
 }
 
-void stl::Mesher::SplitX(Mesh &mesh, int i) {
-    auto x = xs[i];
+// Note: structured binding not working in nvcc
+Fragments& operator+=(Fragments &a, Fragments &b) {
+    for (auto &pair : b.x) {
+        auto i = pair.first;
+        a.x[i] = a.x.count(i) ? a.x[i] + b.x[i] : b.x[i];
+    }
+    for (auto &pair : b.y) {
+        auto i = pair.first;
+        a.y[i] = a.y.count(i) ? a.y[i] + b.y[i] : b.y[i];
+    }
+    for (auto &pair : b.z) {
+        auto i = pair.first;
+        a.z[i] = a.z.count(i) ? a.z[i] + b.z[i] : b.z[i];
+    }
+    return a;
+}
+
+Fragments& operator-=(Fragments &a, Fragments &b) {
+    for (auto &pair : b.x) {
+        auto i = pair.first;
+        a.x[i] = a.x.count(i) ? a.x[i] - b.x[i] : b.x[i];
+    }
+    for (auto &pair : b.y) {
+        auto i = pair.first;
+        a.y[i] = a.y.count(i) ? a.y[i] - b.y[i] : b.y[i];
+    }
+    for (auto &pair : b.z) {
+        auto i = pair.first;
+        a.z[i] = a.z.count(i) ? a.z[i] - b.z[i] : b.z[i];
+    }
+    return a;
+}
+
+MultiPolygon stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
     auto bucket = malloc_device<int>(faceNum);
     auto idx = malloc_device<int>(1);
     auto splited = malloc_device<Splited>(faceNum);
 
     int bucketLen = 0;
     to_device(&bucketLen, 1, idx);
-    kernel_group CU_DIM(256, 128) (vertices, faces, faceNum, bounds, x, DIR_X, bucket, idx);
+    kernel_group CU_DIM(256, 128) (vertices, faces, faceNum, bounds, pos, dir, bucket, idx);
     CU_ASSERT(cudaGetLastError());
     from_device(idx, 1, &bucketLen);
+
+    MultiPolygon shape;
     if (bucketLen == 0) {
         cudaFree(bucket);
         cudaFree(idx);
         cudaFree(splited);
-        return;
+        return shape;
     }
 
     int splitedLen = 0;
     to_device(&splitedLen, 1, idx);
-    kernel_split CU_DIM(256, 128) (vertices, faces, bucket, bucketLen, x, DIR_X, splited, idx);
+    kernel_split CU_DIM(256, 128) (vertices, faces, bucket, bucketLen, pos, dir, splited, idx);
     CU_ASSERT(cudaGetLastError());
 
     auto splitedArr = new Splited[faceNum];
     from_device(splited, bucketLen, splitedArr);
-    auto loops = get_loops(mesh, splitedArr, bucketLen, DIR_X);
+    auto loops = get_loops(mesh, splitedArr, bucketLen, dir);
 
     delete splitedArr;
     cudaFree(bucket);
     cudaFree(idx);
     cudaFree(splited);
 
-    MultiPolygon shape;
     for (auto &loop : loops) {
         if (!loop.hole) {
-            shape = shape + make_poly(loop, DIR_X);
+            shape = shape + make_poly(loop, dir);
         }
     }
     for (auto &loop : loops) {
         if (loop.hole) {
-            shape = shape - make_poly(loop, DIR_X);
+            shape = shape - make_poly(loop, dir);
         }
     }
+    return shape;
+}
 
+void stl::Spliter::SliceX(Mesh &mesh, int i) {
+    auto a = Slice(mesh, (round(xs[i] / tol) - 0.5) * tol, DIR_X),
+        b = Slice(mesh, (round(xs[i] / tol) + 0.5) * tol, DIR_X),
+        shape = a + b;
     for (int j = 0; j < ny - 1; j ++) {
         auto stride = shape * Box({ ys[j] - tol, min.z }, { ys[j + 1], max.z });
         for (int k = 0; k < nz - 1; k ++) {
             auto patch = stride * Box({ min.y, zs[k] - tol }, { max.y, zs[k + 1] });
             if (patch.size()) {
                 lock_guard<mutex> guard(lock);
-                sx[i + j * nx + k * nx * ny] = patch;
+                fragments.x[i + j * nx + k * nx * ny] = patch;
             }
         }
     }
 }
 
-stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
+void stl::Spliter::SliceY(Mesh &mesh, int j) {
+    auto a = Slice(mesh, (round(ys[j] / tol) - 0.5) * tol, DIR_Y),
+        b = Slice(mesh, (round(ys[j] / tol) + 0.5) * tol, DIR_Y),
+        shape = a + b;
+    for (int k = 0; k < nz - 1; k ++) {
+        auto stride = shape * Box({ zs[k] - tol, min.x }, { zs[k + 1], max.x });
+        for (int i = 0; i < nx - 1; i ++) {
+            auto patch = stride * Box({ min.z, xs[i] - tol }, { max.z, xs[i + 1] });
+            if (patch.size()) {
+                lock_guard<mutex> guard(lock);
+                fragments.y[i + j * nx + k * nx * ny] = patch;
+            }
+        }
+    }
+}
+
+void stl::Spliter::SliceZ(Mesh &mesh, int k) {
+    auto a = Slice(mesh, (round(zs[k] / tol) - 0.5) * tol, DIR_Z),
+        b = Slice(mesh, (round(zs[k] / tol) + 0.5) * tol, DIR_Z),
+        shape = a + b;
+    for (int i = 0; i < nx - 1; i ++) {
+        auto stride = shape * Box({ xs[i] - tol, min.y }, { xs[i + 1], max.y });
+        for (int j = 0; j < ny - 1; j ++) {
+            auto patch = stride * Box({ min.x, ys[j] - tol }, { max.x, ys[j + 1] });
+            if (patch.size()) {
+                lock_guard<mutex> guard(lock);
+                fragments.z[i + j * nx + k * nx * ny] = patch;
+            }
+        }
+    }
+}
+
+stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh) {
     tol = 1e-5;
     min = mesh.min; max = mesh.max;
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
@@ -445,12 +516,18 @@ stl::Mesher::Mesher(grid::Grid &grid, Mesh &mesh) {
 
     ctpl::thread_pool pool(thread::hardware_concurrency());
     for (int i = 0; i < nx; i ++) {
-        pool.push([&, i](int id) { SplitX(mesh, i); });
+        pool.push([&, i](int id) { SliceX(mesh, i); });
+    }
+    for (int j = 0; j < ny; j ++) {
+        pool.push([&, j](int id) { SliceY(mesh, j); });
+    }
+    for (int k = 0; k < nz; k ++) {
+        pool.push([&, k](int id) { SliceZ(mesh, k); });
     }
     pool.stop(true);
 }
 
-stl::Mesher::~Mesher() {
+stl::Spliter::~Spliter() {
     cudaFree(faces);
     cudaFree(vertices);
     cudaFree(normals);
