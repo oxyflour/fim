@@ -311,26 +311,26 @@ auto is_reversed(vector<double3> &pts, int dir) {
 }
 
 auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
-    auto loops = get_rings(mesh, splited, num);
+    auto rings = get_rings(mesh, splited, num);
     auto norm = dir == 0 ? NORM_X : dir == 1 ? NORM_Y : NORM_Z;
     auto ret = vector<Loop>();
-    for (auto &loop : loops) {
-        auto &pts = loop.pts;
-        auto face = loop.f.x;
+    for (auto &ring : rings) {
+        auto &pts = ring.pts;
+        auto face = ring.f.x;
 
         auto reversed = is_reversed(pts, dir);
         if (reversed) {
             reverse(pts.begin(), pts.end());
-            face = loop.f.y;
+            face = ring.f.y;
         }
 
         auto hole = false;
         if (pts.size() >= 2) {
-            auto &a = pts[0], &b = pts[1];
-            hole = dot(cross(a - b, mesh.normals[face]), norm) > 0;
+            auto &a = pts[0], &b = pts[1], &n = mesh.normals[face];
+            hole = dot(cross(a - b, n), norm) > 0;
         }
 
-        ret.push_back({ loop.pts, hole });
+        ret.push_back({ pts, hole });
     }
     return ret;
 }
