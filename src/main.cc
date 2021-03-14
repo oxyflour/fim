@@ -11,14 +11,18 @@
 
 using namespace std;
 
+auto is_dielec(string name) {
+    return name != "PEC";
+}
+
+auto mat_priority = map<string, int>();
+
 auto solve() {
     auto proj = cst::Project("C:\\Projects\\fim-example.cst", "2019", true, true);
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
 
     auto mats = map<string, stl::Fragments>();
-    auto lock = mutex();
-
     for (auto &solid : proj.solids) {
         auto mesh = stl::load(solid.stl);
         auto fragments = stl::Spliter(grid, mesh).fragments;
@@ -29,7 +33,30 @@ auto solve() {
         }
     }
 
+    auto dielecs = vector<string>();
+    auto allMetal = stl::Fragments();
+    for (auto &[mat, frags] : mats) {
+        if (is_dielec(mat)) {
+            dielecs.push_back(mat);
+        } else {
+            allMetal += frags;
+        }
+    }
+
+    sort(dielecs.begin(), dielecs.end(), [](string a, string b) {
+        return mat_priority[a] - mat_priority[b];
+    });
+
+    for (int i = 0; i < dielecs.size(); i ++) {
+        auto &a = mats[dielecs[i]];
+        for (int j = i + 1; j < dielecs.size(); j ++) {
+            a -= mats[dielecs[j]];
+        }
+        a -= allMetal;
+    }
+
     // debug
+    mats["ALL_METAL"] = allMetal;
     auto export_svg = [&](string file, map<int, stl::MultiPolygon> &shapes, function<bool(int)> test) {
         auto list = vector<stl::MultiPolygon *>();
         for (auto &[n, s] : shapes) {

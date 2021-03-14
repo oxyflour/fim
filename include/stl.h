@@ -75,5 +75,6 @@ namespace stl {
 }
 
 stl::Fragments& operator+=(stl::Fragments &a, stl::Fragments &b);
+stl::Fragments& operator-=(stl::Fragments &a, stl::Fragments &b);
 
 #endif
