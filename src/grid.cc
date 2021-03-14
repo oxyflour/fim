@@ -22,12 +22,26 @@ float3 Grid::At(int3 idx) {
     return float3 { (float) xs[idx.x], (float) ys[idx.y], (float) zs[idx.z] };
 }
 
+int Grid::GetIndex(int4 idx) {
+    return GetIndex(idx.x, idx.y, idx.z, idx.w);
+}
+
 int Grid::GetIndex(int3 idx, int dir) {
     return GetIndex(idx.x, idx.y, idx.z, dir);
 }
 
 int Grid::GetIndex(int i, int j, int k, int d) {
     return i + j * nx + k * nxy + d * nxyz;
+}
+
+int4 Grid::GetIndex(int i) {
+    auto d = i / nxyz;
+    i -= d * nxyz;
+    auto k = i / nxy;
+    i -= k * nxy;
+    auto j = i / nx;
+    i -= j * nx;
+    return int4 { i, j, k, d };
 }
 
 int3 Grid::FindIndex(float3 pos, float epsi) {

@@ -1,4 +1,5 @@
 #include <ctpl_stl.h>
+#include <regex>
 
 #include "utils/check.h"
 #include "utils/plt.h"
@@ -11,29 +12,58 @@
 using namespace std;
 
 auto solve() {
-    auto proj = cst::Project("C:\\Projects\\fim-cylinder.cst", "2019", true, true);
+    auto proj = cst::Project("C:\\Projects\\fim-example.cst", "2019", true, true);
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
 
     auto mats = map<string, stl::Fragments>();
-    mutex lock;
+    auto lock = mutex();
 
-    ctpl::thread_pool pool;
     for (auto &solid : proj.solids) {
-        pool.push([&] (int id) {
-            auto mesh = stl::load(solid.stl);
-            auto fragments = stl::Spliter(grid, mesh).fragments;
-            {
-                lock_guard guard(lock);
-                if (mats.count(solid.material)) {
-                    mats[solid.material] += fragments;
-                } else {
-                    mats[solid.material] = fragments;
-                }
-            }
-        });
+        auto mesh = stl::load(solid.stl);
+        auto fragments = stl::Spliter(grid, mesh).fragments;
+        cout << solid.stl << endl;
+        stl::save(solid.stl + ".rounded.stl", mesh);
+        if (mats.count(solid.material)) {
+            mats[solid.material] += fragments;
+        } else {
+            mats[solid.material] = fragments;
+        }
     }
-    pool.stop(true);
+
+    // debug
+    auto export_svg = [&](string file, map<int, stl::MultiPolygon> &shapes, function<bool(int)> test) {
+        auto list = vector<stl::MultiPolygon *>();
+        for (auto &[n, s] : shapes) {
+            if (test(n)) {
+                list.push_back(&s);
+            }
+        }
+        if (list.size()) {
+            ofstream fn(file);
+            stl::bg::svg_mapper<stl::Point> map(fn, 500, 500);
+            for (auto ptr : list) {
+                map.add(*ptr);
+            }
+            for (auto ptr : list) {
+                map.map(*ptr, "fill:blue;stroke:black");
+            }
+        }
+    };
+    for (auto &[mat, frags] : mats) {
+        for (int i = 0; i < grid.nx; i ++) {
+            export_svg("mat-" + mat + ".x-" + to_string(i) + "-" + to_string(grid.xs[i]) + ".svg",
+                frags.x, [&, i](int n) { return grid.GetIndex(n).x == i; });
+        }
+        for (int j = 0; j < grid.ny; j ++) {
+            export_svg("mat-" + mat + ".y-" + to_string(j) + "-" + to_string(grid.ys[j]) + ".svg",
+                frags.y, [&, j](int n) { return grid.GetIndex(n).y == j; });
+        }
+        for (int k = 0; k < grid.nz; k ++) {
+            export_svg("mat-" + mat + ".z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
+                frags.z, [&, k](int n) { return grid.GetIndex(n).z == k; });
+        }
+    }
 
 /*
 

@@ -46,8 +46,12 @@ namespace stl {
         std::map<int, MultiPolygon> x, y, z;
     };
 
+    struct Locks {
+        std::mutex x, y, z;
+    };
+
     struct Spliter {
-        Spliter(grid::Grid &grid, Mesh &mesh);
+        Spliter(grid::Grid &grid, Mesh &mesh, double tol = 1e-6);
         ~Spliter();
         Fragments fragments;
     private:
@@ -60,13 +64,13 @@ namespace stl {
         Bound *bounds;
         int faceNum, vertNum;
 
-        std::mutex lock;
+        Locks locks;
         double tol;
 
         MultiPolygon Slice(Mesh &mesh, double pos, int dir);
-        void SliceX(Mesh &mesh, int i);
-        void SliceY(Mesh &mesh, int j);
-        void SliceZ(Mesh &mesh, int k);
+        void SliceX(grid::Grid &grid, Mesh &mesh, int i);
+        void SliceY(grid::Grid &grid, Mesh &mesh, int j);
+        void SliceZ(grid::Grid &grid, Mesh &mesh, int k);
     };
 }
 

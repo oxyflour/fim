@@ -60,8 +60,12 @@ inline __host__ __device__ double3 fmax(double3 a, double3 b) {
     return double3 { fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z) }; 
 }
 
+inline __host__ __device__ double round_by(double a, double tol) {
+    return round(a / tol) * tol;
+}
+
 inline __host__ __device__ double3 round_by(double3 a, double tol) {
-    return double3 { round(a.x / tol) * tol, round(a.y / tol) * tol, round(a.z / tol) * tol };
+    return double3 { round_by(a.x, tol), round_by(a.y, tol), round_by(a.z, tol) };
 }
 
 inline bool operator<(double3 a, double3 b) {
@@ -72,6 +76,11 @@ constexpr int
     DIR_X = 0,
     DIR_Y = 1,
     DIR_Z = 2;
+
+constexpr auto
+    NORM_X = double3 { 1, 0, 0 },
+    NORM_Y = double3 { 0, 1, 0 },
+    NORM_Z = double3 { 0, 0, 1 };
 
 struct Splited {
     int f;
@@ -292,6 +301,10 @@ auto is_reversed(vector<double3> &pts, int dir) {
         auto &a = pts[i], &b = pts[i + 1];
         if (dir == DIR_X) {
             sum += (b.y - a.y) * (b.z + a.z);
+        } else if (dir == DIR_Y) {
+            sum += (b.z - a.z) * (b.x + a.x);
+        } else {
+            sum += (b.x - a.x) * (b.y + a.y);
         }
     }
     return sum < 0;
@@ -299,15 +312,13 @@ auto is_reversed(vector<double3> &pts, int dir) {
 
 auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
     auto loops = get_rings(mesh, splited, num);
-    auto norm =
-        dir == 0 ? double3 { 1, 0, 0 } :
-        dir == 1 ? double3 { 0, 1, 0 } : double3 { 0, 0, 1 };
+    auto norm = dir == 0 ? NORM_X : dir == 1 ? NORM_Y : NORM_Z;
     auto ret = vector<Loop>();
     for (auto &loop : loops) {
         auto &pts = loop.pts;
         auto face = loop.f.x;
 
-        auto reversed = is_reversed(pts, DIR_X);
+        auto reversed = is_reversed(pts, dir);
         if (reversed) {
             reverse(pts.begin(), pts.end());
             face = loop.f.y;
@@ -434,68 +445,59 @@ MultiPolygon stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
     return shape;
 }
 
-void stl::Spliter::SliceX(Mesh &mesh, int i) {
-    auto a = Slice(mesh, (round(xs[i] / tol) - 0.5) * tol, DIR_X),
-        b = Slice(mesh, (round(xs[i] / tol) + 0.5) * tol, DIR_X),
+void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
+    auto a = Slice(mesh, round_by(xs[i], tol) - tol / 2, DIR_X),
+        b = Slice(mesh, round_by(xs[i], tol) + tol / 2, DIR_X),
         shape = a + b;
     for (int j = 0; j < ny - 1; j ++) {
         auto stride = shape * Box({ ys[j] - tol, min.z }, { ys[j + 1], max.z });
         for (int k = 0; k < nz - 1; k ++) {
             auto patch = stride * Box({ min.y, zs[k] - tol }, { max.y, zs[k + 1] });
             if (patch.size()) {
-                lock_guard<mutex> guard(lock);
-                fragments.x[i + j * nx + k * nx * ny] = patch;
+                lock_guard<mutex> guard(locks.x);
+                fragments.x[grid.GetIndex(i, j, k)] = patch;
             }
         }
     }
 }
 
-void stl::Spliter::SliceY(Mesh &mesh, int j) {
-    auto a = Slice(mesh, (round(ys[j] / tol) - 0.5) * tol, DIR_Y),
-        b = Slice(mesh, (round(ys[j] / tol) + 0.5) * tol, DIR_Y),
+void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
+    auto a = Slice(mesh, round_by(ys[j], tol) - tol / 2, DIR_Y),
+        b = Slice(mesh, round_by(ys[j], tol) + tol / 2, DIR_Y),
         shape = a + b;
     for (int k = 0; k < nz - 1; k ++) {
         auto stride = shape * Box({ zs[k] - tol, min.x }, { zs[k + 1], max.x });
         for (int i = 0; i < nx - 1; i ++) {
             auto patch = stride * Box({ min.z, xs[i] - tol }, { max.z, xs[i + 1] });
             if (patch.size()) {
-                lock_guard<mutex> guard(lock);
-                fragments.y[i + j * nx + k * nx * ny] = patch;
+                lock_guard<mutex> guard(locks.y);
+                fragments.y[grid.GetIndex(i, j, k)] = patch;
             }
         }
     }
 }
 
-void stl::Spliter::SliceZ(Mesh &mesh, int k) {
-    auto a = Slice(mesh, (round(zs[k] / tol) - 0.5) * tol, DIR_Z),
-        b = Slice(mesh, (round(zs[k] / tol) + 0.5) * tol, DIR_Z),
+void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
+    auto a = Slice(mesh, round_by(zs[k], tol) - tol / 2, DIR_Z),
+        b = Slice(mesh, round_by(zs[k], tol) + tol / 2, DIR_Z),
         shape = a + b;
     for (int i = 0; i < nx - 1; i ++) {
         auto stride = shape * Box({ xs[i] - tol, min.y }, { xs[i + 1], max.y });
         for (int j = 0; j < ny - 1; j ++) {
             auto patch = stride * Box({ min.x, ys[j] - tol }, { max.x, ys[j + 1] });
             if (patch.size()) {
-                lock_guard<mutex> guard(lock);
-                fragments.z[i + j * nx + k * nx * ny] = patch;
+                lock_guard<mutex> guard(locks.z);
+                fragments.z[grid.GetIndex(i, j, k)] = patch;
             }
         }
     }
 }
 
-stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh) {
-    tol = 1e-5;
+stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, double tol) {
+    this->tol = tol;
     min = mesh.min; max = mesh.max;
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
     nx = grid.nx; ny = grid.ny; nz = grid.nz;
-    for (int i = 0; i < nx; i ++) {
-        xs[i] = (round(xs[i] / tol) + 0.5) * tol;
-    }
-    for (int j = 0; j < ny; j ++) {
-        ys[j] = (round(ys[j] / tol) + 0.5) * tol;
-    }
-    for (int k = 0; k < nz; k ++) {
-        zs[k] = (round(zs[k] / tol) + 0.5) * tol;
-    }
 
     faces = to_device(mesh.faces.data(), mesh.faces.size());
     faceNum = mesh.faces.size();
@@ -516,13 +518,13 @@ stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh) {
 
     ctpl::thread_pool pool(thread::hardware_concurrency());
     for (int i = 0; i < nx; i ++) {
-        pool.push([&, i](int id) { SliceX(mesh, i); });
+        pool.push([&, i](int id) { SliceX(grid, mesh, i); });
     }
     for (int j = 0; j < ny; j ++) {
-        pool.push([&, j](int id) { SliceY(mesh, j); });
+        pool.push([&, j](int id) { SliceY(grid, mesh, j); });
     }
     for (int k = 0; k < nz; k ++) {
-        pool.push([&, k](int id) { SliceZ(mesh, k); });
+        pool.push([&, k](int id) { SliceZ(grid, mesh, k); });
     }
     pool.stop(true);
 }
