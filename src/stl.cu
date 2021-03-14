@@ -367,41 +367,42 @@ template <typename T> auto operator*(MultiPolygon &shape, T &poly) {
 }
 
 // Note: structured binding not working in nvcc
-Fragments& operator+=(Fragments &a, Fragments &b) {
-    for (auto &pair : b.x) {
+map<int, MultiPolygon>& operator+=(map<int, MultiPolygon> &a, map<int, MultiPolygon> &b) {
+    for (auto &pair : b) {
         auto i = pair.first;
-        a.x[i] = a.x.count(i) ? a.x[i] + b.x[i] : b.x[i];
-    }
-    for (auto &pair : b.y) {
-        auto i = pair.first;
-        a.y[i] = a.y.count(i) ? a.y[i] + b.y[i] : b.y[i];
-    }
-    for (auto &pair : b.z) {
-        auto i = pair.first;
-        a.z[i] = a.z.count(i) ? a.z[i] + b.z[i] : b.z[i];
+        a[i] = a.count(i) ? a[i] + b[i] : b[i];
     }
     return a;
 }
 
+map<int, MultiPolygon>& operator-=(map<int, MultiPolygon> &a, map<int, MultiPolygon> &b) {
+    auto removed = vector<int>();
+    for (auto &pair : b) {
+        auto i = pair.first;
+        if (a.count(i)) {
+            a[i] = a[i] - b[i];
+            if (!a[i].size()) {
+                removed.push_back(i);
+            }
+        }
+    }
+    for (auto i : removed) {
+        a.erase(i);
+    }
+    return a;
+}
+
+Fragments& operator+=(Fragments &a, Fragments &b) {
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
+    return a;
+}
+
 Fragments& operator-=(Fragments &a, Fragments &b) {
-    for (auto &pair : b.x) {
-        auto i = pair.first;
-        if (a.x.count(i)) {
-            a.x[i] = a.x[i] - b.x[i];
-        }
-    }
-    for (auto &pair : b.y) {
-        auto i = pair.first;
-        if (a.y.count(i)) {
-            a.y[i] = a.y[i] - b.y[i];
-        }
-    }
-    for (auto &pair : b.z) {
-        auto i = pair.first;
-        if (a.z.count(i)) {
-            a.x[i] = a.z[i] = b.z[i];
-        }
-    }
+    a.x -= b.x;
+    a.y -= b.y;
+    a.z -= b.z;
     return a;
 }
 
