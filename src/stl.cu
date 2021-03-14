@@ -386,15 +386,21 @@ Fragments& operator+=(Fragments &a, Fragments &b) {
 Fragments& operator-=(Fragments &a, Fragments &b) {
     for (auto &pair : b.x) {
         auto i = pair.first;
-        a.x[i] = a.x.count(i) ? a.x[i] - b.x[i] : b.x[i];
+        if (a.x.count(i)) {
+            a.x[i] = a.x[i] - b.x[i];
+        }
     }
     for (auto &pair : b.y) {
         auto i = pair.first;
-        a.y[i] = a.y.count(i) ? a.y[i] - b.y[i] : b.y[i];
+        if (a.y.count(i)) {
+            a.y[i] = a.y[i] - b.y[i];
+        }
     }
     for (auto &pair : b.z) {
         auto i = pair.first;
-        a.z[i] = a.z.count(i) ? a.z[i] - b.z[i] : b.z[i];
+        if (a.z.count(i)) {
+            a.x[i] = a.z[i] = b.z[i];
+        }
     }
     return a;
 }
