@@ -22,8 +22,6 @@ auto solve() {
     for (auto &solid : proj.solids) {
         auto mesh = stl::load(solid.stl);
         auto fragments = stl::Spliter(grid, mesh).fragments;
-        cout << solid.stl << endl;
-        stl::save(solid.stl + ".rounded.stl", mesh);
         if (mats.count(solid.material)) {
             mats[solid.material] += fragments;
         } else {

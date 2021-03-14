@@ -296,9 +296,9 @@ auto get_rings(Mesh &mesh, Splited *splited, int num) {
 }
 
 auto is_reversed(vector<double3> &pts, int dir) {
-    auto sum = 0;
-    for (int i = 0; i < pts.size() - 1; i ++) {
-        auto &a = pts[i], &b = pts[i + 1];
+    double sum = 0;
+    for (int i = 0, n = pts.size(); i < n; i ++) {
+        auto &a = pts[i], &b = pts[(i + 1) % n];
         if (dir == DIR_X) {
             sum += (b.y - a.y) * (b.z + a.z);
         } else if (dir == DIR_Y) {
@@ -339,9 +339,9 @@ auto make_poly(Loop &loop, int dir) {
     Polygon poly;
     for (auto &pt : loop.pts) {
         auto pos =
-            dir == 0 ? Point { pt.y, pt.z } :
-            dir == 1 ? Point { pt.z, pt.x } :
-                       Point { pt.x, pt.y };
+            dir == DIR_X ? Point { pt.y, pt.z } :
+            dir == DIR_Y ? Point { pt.z, pt.x } :
+                           Point { pt.x, pt.y };
         bg::append(poly, pos);
     }
     bg::correct(poly);
@@ -422,10 +422,11 @@ MultiPolygon stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
     to_device(&splitedLen, 1, idx);
     kernel_split CU_DIM(256, 128) (vertices, faces, bucket, bucketLen, pos, dir, splited, idx);
     CU_ASSERT(cudaGetLastError());
+    from_device(idx, 1, &splitedLen);
 
     auto splitedArr = new Splited[faceNum];
-    from_device(splited, bucketLen, splitedArr);
-    auto loops = get_loops(mesh, splitedArr, bucketLen, dir);
+    from_device(splited, splitedLen, splitedArr);
+    auto loops = get_loops(mesh, splitedArr, splitedLen, dir);
 
     delete splitedArr;
     cudaFree(bucket);
