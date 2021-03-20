@@ -82,6 +82,11 @@ constexpr auto
     NORM_Y = double3 { 0, 1, 0 },
     NORM_Z = double3 { 0, 0, 1 };
 
+struct Joint {
+    int2 e;
+    double3 p;
+};
+
 struct Splited {
     int f;
     Joint from, to;
@@ -144,10 +149,10 @@ __global__ void kernel_split(
         u.z = (m.z - val) / (m.z - m.x);
         out[atomicAdd(idx, 1)] =
             u.x > 0 && u.x < 1 && u.y > 0 && u.y < 1 ?
-                Splited { k, f.x, f.y, u.x, f.y, f.z, u.y } :
+                Splited { k, f.x, f.y, lerp(a, b, u.x), f.y, f.z, lerp(b, c, u.y) } :
             u.y > 0 && u.y < 1 && u.z > 0 && u.z < 1 ?
-                Splited { k, f.y, f.z, u.y, f.z, f.x, u.z } :
-                Splited { k, f.z, f.x, u.z, f.x, f.y, u.x };
+                Splited { k, f.y, f.z, lerp(b, c, u.y), f.z, f.x, lerp(c, a, u.z) } :
+                Splited { k, f.z, f.x, lerp(c, a, u.z), f.x, f.y, lerp(a, b, u.x) };
     }
 }
 
@@ -251,11 +256,6 @@ Mesh stl::load(string file, double tol) {
     return mesh;
 }
 
-double3 stl::Mesh::get(Joint &joint) {
-    auto a = vertices[joint.e.x], b = vertices[joint.e.y];
-    return lerp(a, b, joint.u);
-}
-
 auto idx_of(int2 &i, int n) {
     return i.x < i.y ? i.x * n + i.y : i.y * n + i.x;
 }
@@ -271,28 +271,28 @@ auto get_rings(Mesh &mesh, Splited *splited, int num) {
             to = idx_of(edge.to.e, maxVert);
         conns.count(from) ? (conns[from].b = { to, f }) : (conns[from].a = { to, f });
         conns.count(to) ? (conns[to].b = { from, f }) : (conns[to].a = { from, f });
-        coord[from] = mesh.get(edge.from);
-        coord[to] = mesh.get(edge.to);
+        coord[from] = edge.from.p;
+        coord[to] = edge.to.p;
     }
 
-    auto loops = vector<Ring>();
+    auto rings = vector<Ring>();
     while (conns.size()) {
-        auto loop = Ring();
+        auto ring = Ring();
         auto &begin = *conns.begin();
         auto current = begin.first, prev = begin.second.a.i;
-        loop.f = { begin.second.a.f, begin.second.b.f };
+        ring.f = { begin.second.a.f, begin.second.b.f };
         while (conns.count(current)) {
-            loop.pts.push_back(coord[current]);
+            ring.pts.push_back(coord[current]);
             auto &pair = conns[current];
             auto next = pair.a.i == prev ? pair.b.i : pair.a.i;
             conns.erase(current);
             prev = current;
             current = next;
         }
-        loops.push_back(loop);
+        rings.push_back(ring);
     }
 
-    return loops;
+    return rings;
 }
 
 auto is_reversed(vector<double3> &pts, int dir) {
