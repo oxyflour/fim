@@ -530,11 +530,14 @@ stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, double tol) {
     min = mesh.min; max = mesh.max;
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
     nx = grid.nx; ny = grid.ny; nz = grid.nz;
+    for (auto &v : xs) v = round_by(v, tol);
+    for (auto &v : ys) v = round_by(v, tol);
+    for (auto &v : zs) v = round_by(v, tol);
 
-    faces = to_device(mesh.faces.data(), mesh.faces.size());
     faceNum = mesh.faces.size();
-    vertices = to_device(mesh.vertices.data(), mesh.vertices.size());
+    faces = to_device(mesh.faces.data(), faceNum);
     vertNum = mesh.vertices.size();
+    vertices = to_device(mesh.vertices.data(), vertNum);
     normals = malloc_device<double3>(faceNum);
     bounds = malloc_device<Bound>(faceNum);
 
