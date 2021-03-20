@@ -376,8 +376,42 @@ template <typename T> auto operator*(MultiPolygon &shape, T &poly) {
     return input;
 }
 
+inline auto operator+(RTree &a, RTree &b) {
+    RTree tree = a;
+    for (auto &item : b) {
+        tree.insert(item);
+    }
+    return tree;
+}
+
+inline auto operator+(Shape &a, Shape &b) {
+    Shape shape;
+    shape.polys = a.polys + b.polys;
+    bg::envelope(shape.polys, shape.bound);
+    shape.tree = a.tree + b.tree;
+    return shape;
+}
+
+inline auto operator-(Shape &a, Shape &b) {
+    Shape shape;
+    shape.polys = a.polys - b.polys;
+    bg::envelope(shape.polys, shape.bound);
+    shape.tree = a.tree + b.tree;
+    return shape;
+}
+
+inline auto operator*(Shape &a, Box &b) {
+    Shape shape;
+    if (a.polys.size() && bg::intersects(a.bound, b)) {
+        shape.polys = a.polys * b;
+        a.tree.query(bgi::intersects(b), bgi::inserter(shape.tree));
+        bg::envelope(shape.polys, shape.bound);
+    }
+    return shape;
+}
+
 // Note: structured binding not working in nvcc
-map<int, MultiPolygon>& operator+=(map<int, MultiPolygon> &a, map<int, MultiPolygon> &b) {
+map<int, Shape>& operator+=(map<int, Shape> &a, map<int, Shape> &b) {
     for (auto &pair : b) {
         auto i = pair.first;
         a[i] = a.count(i) ? a[i] + b[i] : b[i];
@@ -385,13 +419,13 @@ map<int, MultiPolygon>& operator+=(map<int, MultiPolygon> &a, map<int, MultiPoly
     return a;
 }
 
-map<int, MultiPolygon>& operator-=(map<int, MultiPolygon> &a, map<int, MultiPolygon> &b) {
+map<int, Shape>& operator-=(map<int, Shape> &a, map<int, Shape> &b) {
     auto removed = vector<int>();
     for (auto &pair : b) {
         auto i = pair.first;
         if (a.count(i)) {
             a[i] = a[i] - b[i];
-            if (!a[i].size()) {
+            if (!a[i].polys.size()) {
                 removed.push_back(i);
             }
         }
@@ -424,40 +458,16 @@ auto get_lines(MultiPolygon &polys) {
         for (auto &pt : poly.outer()) {
             bg::append(edge, pt);
         }
+        bg::append(lines, edge);
         for (auto &loop : poly.inners()) {
             Line edge;
             for (auto &pt : loop) {
                 bg::append(edge, pt);
             }
+            bg::append(lines, edge);
         }
-        bg::append(lines, edge);
     }
     return lines;
-}
-
-inline auto operator+(Shape &a, Shape &b) {
-    Shape shape;
-    shape.polys = a.polys + b.polys;
-    bg::envelope(shape.polys, shape.bound);
-    shape.lines = get_lines(shape.polys);
-    shape.tree = a.tree;
-    for (auto &item : b.tree) {
-        shape.tree.insert(item);
-    }
-    return shape;
-}
-
-inline auto operator*(Shape &a, Box &b) {
-    Shape shape;
-    if (a.polys.size() && bg::intersects(a.bound, b)) {
-        shape.polys = a.polys * b;
-        a.tree.query(bgi::intersects(b), bgi::inserter(shape.tree));
-        bg::envelope(shape.polys, shape.bound);
-        MultiLine lines;
-        bg::intersection(shape.lines, b, lines);
-        shape.lines = lines;
-    }
-    return shape;
 }
 
 Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
@@ -509,33 +519,24 @@ Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
         for (int i = 0, n = loop.pts.size(); i < n; i ++) {
             auto &a = loop.pts[i], &b = loop.pts[(i + 1) % n];
             auto s = Segment(pt_2d(a, dir), pt_2d(b, dir));
-            shape.tree.insert({ s, a.f.x });
+            shape.tree.insert({ s, mesh.normals[a.f.x] });
         }
     }
 
-    shape.lines = get_lines(shape.polys);
     return shape;
 }
 
-auto check_edges(Shape &shape, Mesh &mesh) {
-    printf("begin multiline\n");
-    for (auto &line : shape.lines) {
-        printf("begin line\n");
-        for (auto &pt : line) {
+auto check_edges(Shape &shape) {
+    for (auto &poly : shape.polys) {
+        for (auto &pt : poly.outer()) {
             vector<RTValue> data;
             shape.tree.query(bgi::intersects(pt), back_inserter(data));
-            printf("begin pt %zd\n", data.size());
             for (auto &s : data) {
-                auto f = s.second;
-                if (f >= 0 && f < mesh.faces.size()) {
-                    auto n = mesh.normals[f];
-                    printf("%f %f: %f %f %f (%d)\n", pt.x(), pt.y(), n.x, n.y, n.z, f);
-                }
+                auto n = s.second;
+                printf("%f %f: %f %f %f\n", pt.x(), pt.y(), n.x, n.y, n.z);
             }
         }
-        printf("end line\n");
     }
-    printf("end multiline\n");
 }
 
 void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
@@ -548,7 +549,7 @@ void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
             auto patch = stride * Box({ min.y, zs[k] - htol }, { max.y, zs[k + 1] + htol });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.x);
-                fragments.x[grid.GetIndex(i, j, k)] = patch.polys;
+                fragments.x[grid.GetIndex(i, j, k)] = patch;
             }
         }
     }
@@ -564,7 +565,7 @@ void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
             auto patch = stride * Box({ min.z, xs[i] - htol }, { max.z, xs[i + 1] + htol });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.y);
-                fragments.y[grid.GetIndex(i, j, k)] = patch.polys;
+                fragments.y[grid.GetIndex(i, j, k)] = patch;
             }
         }
     }
@@ -580,10 +581,11 @@ void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
             auto patch = stride * Box({ min.x, ys[j] - htol }, { max.x, ys[j + 1] + htol });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.z);
-                fragments.z[grid.GetIndex(i, j, k)] = patch.polys;
-            }
-            if (patch.lines.size() && k == 27) {
-                check_edges(patch, mesh);
+                fragments.z[grid.GetIndex(i, j, k)] = patch;
+                // TODO
+                if (k == 27) {
+                    check_edges(shape);
+                }
             }
         }
     }

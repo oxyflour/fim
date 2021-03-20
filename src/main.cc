@@ -17,6 +17,25 @@ auto is_dielec(string name) {
 
 auto mat_priority = map<string, int>();
 
+auto export_svg(string file, map<int, stl::Shape> &shapes, function<bool(int)> test) {
+    auto list = vector<stl::Shape *>();
+    for (auto &[n, s] : shapes) {
+        if (test(n)) {
+            list.push_back(&s);
+        }
+    }
+    if (list.size()) {
+        ofstream fn(file);
+        stl::bg::svg_mapper<stl::Point> map(fn, 500, 500);
+        for (auto ptr : list) {
+            map.add(ptr->polys);
+        }
+        for (auto ptr : list) {
+            map.map(ptr->polys, "fill:blue;stroke:black");
+        }
+    }
+}
+
 auto solve() {
     auto proj = cst::Project("C:\\Projects\\fim-example.cst", "2019", true, true);
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
@@ -59,24 +78,6 @@ auto solve() {
 
     // debug
     mats["ALL_METAL"] = allMetal;
-    auto export_svg = [&](string file, map<int, stl::MultiPolygon> &shapes, function<bool(int)> test) {
-        auto list = vector<stl::MultiPolygon *>();
-        for (auto &[n, s] : shapes) {
-            if (test(n)) {
-                list.push_back(&s);
-            }
-        }
-        if (list.size()) {
-            ofstream fn(file);
-            stl::bg::svg_mapper<stl::Point> map(fn, 500, 500);
-            for (auto ptr : list) {
-                map.add(*ptr);
-            }
-            for (auto ptr : list) {
-                map.map(*ptr, "fill:blue;stroke:black");
-            }
-        }
-    };
     for (auto &[mat, frags] : mats) {
         for (int i = 0; i < grid.nx; i ++) {
             export_svg("mat-" + mat + ".x-" + to_string(i) + "-" + to_string(grid.xs[i]) + ".svg",

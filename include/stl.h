@@ -29,12 +29,13 @@ namespace stl {
     typedef bg::model::box<Point> Box;
 
     namespace bgi = boost::geometry::index;
-    typedef std::pair<Segment, int> RTValue;
+    typedef std::pair<Segment, double3> RTValue;
     typedef bgi::rtree<RTValue, bgi::quadratic<8, 4>> RTree;
 
     struct Shape {
         MultiPolygon polys;
-        MultiLine lines;
+        // Note: check performance issue with lines even you don't use it
+        // MultiLine lines;
         RTree tree;
         Box bound;
     };
@@ -55,7 +56,7 @@ namespace stl {
     Mesh load(std::string file, double tol = 1e-6);
 
     struct Fragments {
-        std::map<int, MultiPolygon> x, y, z;
+        std::map<int, Shape> x, y, z;
     };
 
     struct Locks {
