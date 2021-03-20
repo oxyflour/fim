@@ -105,10 +105,6 @@ struct Point3D {
     int2 f;
 };
 
-struct Ring {
-    vector<Point3D> pts;
-};
-
 struct Loop {
     vector<Point3D> pts;
     bool hole;
@@ -279,14 +275,14 @@ auto get_rings(Mesh &mesh, Splited *splited, int num) {
         coord[to] = edge.to.p;
     }
 
-    auto rings = vector<Ring>();
+    auto rings = vector<vector<Point3D>>();
     while (conns.size()) {
-        auto ring = Ring();
+        auto ring = vector<Point3D>();
         auto &begin = *conns.begin();
         auto current = begin.first, prev = begin.second.a.i;
         while (conns.count(current)) {
             auto &pair = conns[current];
-            ring.pts.push_back({ coord[current], pair.a.f, pair.b.f });
+            ring.push_back({ coord[current], pair.a.f, pair.b.f });
             auto next = pair.a.i == prev ? pair.b.i : pair.a.i;
             conns.erase(current);
             prev = current;
@@ -324,7 +320,7 @@ auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
     auto norm = dir == 0 ? NORM_X : dir == 1 ? NORM_Y : NORM_Z;
     auto ret = vector<Loop>();
     for (auto &ring : rings) {
-        auto &pts = ring.pts;
+        auto &pts = ring;
 
         auto reversed = is_reversed(pts, dir);
         if (reversed) {
