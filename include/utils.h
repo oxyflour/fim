@@ -1,6 +1,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <chrono>
 
 #ifndef UTILS_H
 #define UTILS_H
@@ -76,6 +77,9 @@ namespace utils {
         }
         return ret;
     };
+
+    std::chrono::system_clock::time_point clockNow();
+    float secondsSince(std::chrono::system_clock::time_point &start);
 }
 
 #endif

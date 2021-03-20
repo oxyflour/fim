@@ -22,6 +22,7 @@ auto solve() {
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
 
+    auto start = utils::clockNow();
     auto mats = map<string, stl::Fragments>();
     for (auto &solid : proj.solids) {
         auto mesh = stl::load(solid.stl);
@@ -32,6 +33,7 @@ auto solve() {
             mats[solid.material] = fragments;
         }
     }
+    cout << "PERF: meshed in " << utils::secondsSince(start) << " s" << endl;
 
     auto dielecs = vector<string>();
     auto allMetal = stl::Fragments();

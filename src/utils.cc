@@ -104,3 +104,11 @@ lib_func __stdcall utils::DLL::getProc(string name) {
     }
     return procs[name] = dlsym(module, name.c_str());
 }
+
+chrono::system_clock::time_point utils::clockNow() {
+    return chrono::system_clock::now();
+}
+
+float utils::secondsSince(chrono::system_clock::time_point &start) {
+    return chrono::duration<float>(chrono::system_clock::now() - start).count();
+}
