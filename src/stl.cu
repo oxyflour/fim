@@ -72,6 +72,13 @@ inline bool operator<(double3 a, double3 b) {
     return (a.x < b.x || (a.x == b.x && a.y < b.y) || (a.x == b.x && a.y == b.y && a.z < b.z));
 }
 
+auto swap_xy(int2 &a) {
+    auto t = a.x;
+    a.x = a.y;
+    a.y = t;
+    return a;
+}
+
 constexpr int
     DIR_X = 0,
     DIR_Y = 1,
@@ -282,7 +289,8 @@ auto get_rings(Mesh &mesh, Splited *splited, int num) {
         auto current = begin.first, prev = begin.second.a.i;
         while (conns.count(current)) {
             auto &pair = conns[current];
-            ring.push_back({ coord[current], pair.a.f, pair.b.f });
+            auto face = int2 { pair.a.f, pair.b.f };
+            ring.push_back(Point3D { coord[current], pair.a.i == prev ? swap_xy(face) : face });
             auto next = pair.a.i == prev ? pair.b.i : pair.a.i;
             conns.erase(current);
             prev = current;
@@ -309,12 +317,6 @@ auto is_reversed(vector<Point3D> &pts, int dir) {
     return sum < 0;
 }
 
-template <typename T> void swap(T &a) {
-    auto t = a.x;
-    a.x = a.y;
-    a.y = t;
-}
-
 auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
     auto rings = get_rings(mesh, splited, num);
     auto norm = dir == 0 ? NORM_X : dir == 1 ? NORM_Y : NORM_Z;
@@ -330,7 +332,7 @@ auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
         auto sum = 0.;
         for (int i = 0, s = pts.size(); i < s; i ++) {
             auto &a = pts[i], &b = pts[(i + 1) % s];
-            if (reversed) swap(a.f);
+            if (reversed) swap_xy(a.f);
             auto &n = mesh.normals[a.f.x];
             sum += dot(cross(a.p - b.p, n), norm);
         }
@@ -352,7 +354,7 @@ auto make_poly(Loop &loop, int dir) {
     for (auto &pt : loop.pts) {
         bg::append(poly, pt_2d(pt, dir));
     }
-    bg::correct(poly);
+    bg::append(poly, pt_2d(loop.pts[0], dir));
     return poly;
 }
 
@@ -414,10 +416,34 @@ Fragments& operator-=(Fragments &a, Fragments &b) {
     return a;
 }
 
+auto get_lines(MultiPolygon &polys) {
+    MultiLine lines;
+    lines.resize(polys.size());
+    for (auto &poly : polys) {
+        Line edge;
+        for (auto &pt : poly.outer()) {
+            bg::append(edge, pt);
+        }
+        for (auto &loop : poly.inners()) {
+            Line edge;
+            for (auto &pt : loop) {
+                bg::append(edge, pt);
+            }
+        }
+        bg::append(lines, edge);
+    }
+    return lines;
+}
+
 inline auto operator+(Shape &a, Shape &b) {
     Shape shape;
     shape.polys = a.polys + b.polys;
     bg::envelope(shape.polys, shape.bound);
+    shape.lines = get_lines(shape.polys);
+    shape.tree = a.tree;
+    for (auto &item : b.tree) {
+        shape.tree.insert(item);
+    }
     return shape;
 }
 
@@ -425,7 +451,11 @@ inline auto operator*(Shape &a, Box &b) {
     Shape shape;
     if (a.polys.size() && bg::intersects(a.bound, b)) {
         shape.polys = a.polys * b;
+        a.tree.query(bgi::intersects(b), bgi::inserter(shape.tree));
         bg::envelope(shape.polys, shape.bound);
+        MultiLine lines;
+        bg::intersection(shape.lines, b, lines);
+        shape.lines = lines;
     }
     return shape;
 }
@@ -474,17 +504,48 @@ Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
             shape.polys = shape.polys - make_poly(loop, dir);
         }
     }
+
+    for (auto &loop : loops) {
+        for (int i = 0, n = loop.pts.size(); i < n; i ++) {
+            auto &a = loop.pts[i], &b = loop.pts[(i + 1) % n];
+            auto s = Segment(pt_2d(a, dir), pt_2d(b, dir));
+            shape.tree.insert({ s, a.f.x });
+        }
+    }
+
+    shape.lines = get_lines(shape.polys);
     return shape;
 }
 
+auto check_edges(Shape &shape, Mesh &mesh) {
+    printf("begin multiline\n");
+    for (auto &line : shape.lines) {
+        printf("begin line\n");
+        for (auto &pt : line) {
+            vector<RTValue> data;
+            shape.tree.query(bgi::intersects(pt), back_inserter(data));
+            printf("begin pt %zd\n", data.size());
+            for (auto &s : data) {
+                auto f = s.second;
+                if (f >= 0 && f < mesh.faces.size()) {
+                    auto n = mesh.normals[f];
+                    printf("%f %f: %f %f %f (%d)\n", pt.x(), pt.y(), n.x, n.y, n.z, f);
+                }
+            }
+        }
+        printf("end line\n");
+    }
+    printf("end multiline\n");
+}
+
 void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
-    auto a = Slice(mesh, round_by(xs[i], tol) - tol / 2, DIR_X),
-        b = Slice(mesh, round_by(xs[i], tol) + tol / 2, DIR_X),
+    auto a = Slice(mesh, xs[i] - htol, DIR_X),
+        b = Slice(mesh, xs[i] + htol, DIR_X),
         shape = a + b;
     for (int j = 0; j < ny - 1; j ++) {
-        auto stride = shape * Box({ ys[j] - tol, min.z }, { ys[j + 1], max.z });
+        auto stride = shape * Box({ ys[j] - htol, min.z }, { ys[j + 1] + htol, max.z });
         for (int k = 0; k < nz - 1; k ++) {
-            auto patch = stride * Box({ min.y, zs[k] - tol }, { max.y, zs[k + 1] });
+            auto patch = stride * Box({ min.y, zs[k] - htol }, { max.y, zs[k + 1] + htol });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.x);
                 fragments.x[grid.GetIndex(i, j, k)] = patch.polys;
@@ -494,13 +555,13 @@ void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
 }
 
 void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
-    auto a = Slice(mesh, round_by(ys[j], tol) - tol / 2, DIR_Y),
-        b = Slice(mesh, round_by(ys[j], tol) + tol / 2, DIR_Y),
+    auto a = Slice(mesh, ys[j] - htol, DIR_Y),
+        b = Slice(mesh, ys[j] + htol, DIR_Y),
         shape = a + b;
     for (int k = 0; k < nz - 1; k ++) {
-        auto stride = shape * Box({ zs[k] - tol, min.x }, { zs[k + 1], max.x });
+        auto stride = shape * Box({ zs[k] - htol, min.x }, { zs[k + 1] + htol, max.x });
         for (int i = 0; i < nx - 1; i ++) {
-            auto patch = stride * Box({ min.z, xs[i] - tol }, { max.z, xs[i + 1] });
+            auto patch = stride * Box({ min.z, xs[i] - htol }, { max.z, xs[i + 1] + htol });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.y);
                 fragments.y[grid.GetIndex(i, j, k)] = patch.polys;
@@ -510,16 +571,19 @@ void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
 }
 
 void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
-    auto a = Slice(mesh, round_by(zs[k], tol) - tol / 2, DIR_Z),
-        b = Slice(mesh, round_by(zs[k], tol) + tol / 2, DIR_Z),
+    auto a = Slice(mesh, zs[k] - htol, DIR_Z),
+        b = Slice(mesh, zs[k] + htol, DIR_Z),
         shape = a + b;
     for (int i = 0; i < nx - 1; i ++) {
-        auto stride = shape * Box({ xs[i] - tol, min.y }, { xs[i + 1], max.y });
+        auto stride = shape * Box({ xs[i] - htol, min.y }, { xs[i + 1] + htol, max.y });
         for (int j = 0; j < ny - 1; j ++) {
-            auto patch = stride * Box({ min.x, ys[j] - tol }, { max.x, ys[j + 1] });
+            auto patch = stride * Box({ min.x, ys[j] - htol }, { max.x, ys[j + 1] + htol });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.z);
                 fragments.z[grid.GetIndex(i, j, k)] = patch.polys;
+            }
+            if (patch.lines.size() && k == 27) {
+                check_edges(patch, mesh);
             }
         }
     }
@@ -527,6 +591,7 @@ void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
 
 stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, double tol) {
     this->tol = tol;
+    this->htol = tol / 2;
     min = mesh.min; max = mesh.max;
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
     nx = grid.nx; ny = grid.ny; nz = grid.nz;

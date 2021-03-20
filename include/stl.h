@@ -13,16 +13,29 @@
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/geometry/geometries/multi_polygon.hpp>
+#include <boost/geometry/geometries/linestring.hpp>
+#include <boost/geometry/geometries/multi_linestring.hpp>
+#include <boost/geometry/geometries/segment.hpp>
+#include <boost/geometry/index/rtree.hpp>
 
 namespace stl {
     namespace bg = boost::geometry;
     typedef bg::model::d2::point_xy<double> Point;
     typedef bg::model::polygon<Point> Polygon;
     typedef bg::model::multi_polygon<Polygon> MultiPolygon;
+    typedef bg::model::linestring<Point> Line;
+    typedef bg::model::multi_linestring<Line> MultiLine;
+    typedef bg::model::segment<Point> Segment;
     typedef bg::model::box<Point> Box;
+
+    namespace bgi = boost::geometry::index;
+    typedef std::pair<Segment, int> RTValue;
+    typedef bgi::rtree<RTValue, bgi::quadratic<8, 4>> RTree;
 
     struct Shape {
         MultiPolygon polys;
+        MultiLine lines;
+        RTree tree;
         Box bound;
     };
 
@@ -64,7 +77,7 @@ namespace stl {
         int faceNum, vertNum;
 
         Locks locks;
-        double tol;
+        double tol, htol;
 
         Shape Slice(Mesh &mesh, double pos, int dir);
         void SliceX(grid::Grid &grid, Mesh &mesh, int i);
