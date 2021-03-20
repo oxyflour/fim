@@ -21,6 +21,11 @@ namespace stl {
     typedef bg::model::multi_polygon<Polygon> MultiPolygon;
     typedef bg::model::box<Point> Box;
 
+    struct Shape {
+        MultiPolygon polys;
+        Box bound;
+    };
+
     struct Bound {
         double3 min = { 1e9, 1e9, 1e9 }, max = { -1e9, -1e9, -1e9 };
     };
@@ -61,7 +66,7 @@ namespace stl {
         Locks locks;
         double tol;
 
-        MultiPolygon Slice(Mesh &mesh, double pos, int dir);
+        Shape Slice(Mesh &mesh, double pos, int dir);
         void SliceX(grid::Grid &grid, Mesh &mesh, int i);
         void SliceY(grid::Grid &grid, Mesh &mesh, int j);
         void SliceZ(grid::Grid &grid, Mesh &mesh, int k);
