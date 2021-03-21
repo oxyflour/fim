@@ -612,19 +612,6 @@ Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
     return shape;
 }
 
-auto check_edges(Shape &shape) {
-    for (auto &poly : shape.polys) {
-        for (auto &pt : poly.outer()) {
-            vector<RTValue> data;
-            shape.tree.query(bgi::intersects(pt), back_inserter(data));
-            for (auto &s : data) {
-                auto n = s.second;
-                printf("%f %f: %f %f %f\n", pt.x(), pt.y(), n.x, n.y, n.z);
-            }
-        }
-    }
-}
-
 void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
     auto a = Slice(mesh, xs[i] - tol/2, DIR_X),
         b = Slice(mesh, xs[i] + tol/2, DIR_X),
