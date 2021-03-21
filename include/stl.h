@@ -33,6 +33,7 @@ namespace stl {
     typedef bgi::rtree<RTValue, bgi::quadratic<8, 4>> RTree;
 
     struct Shape {
+        int order;
         MultiPolygon polys;
         // Note: check performance issue with lines even you don't use it
         // MultiLine lines;
@@ -45,6 +46,7 @@ namespace stl {
     };
 
     struct Mesh {
+        int order;
         std::vector<double3> vertices;
         std::vector<int3> faces;
         std::vector<double3> normals;
@@ -53,7 +55,7 @@ namespace stl {
     };
 
     void save(std::string file, Mesh &mesh);
-    Mesh load(std::string file, double tol = 1e-6);
+    Mesh load(std::string file, double tol = 1e-4);
 
     struct Fragments {
         std::map<int, Shape> x, y, z;
@@ -64,7 +66,7 @@ namespace stl {
     };
 
     struct Spliter {
-        Spliter(grid::Grid &grid, Mesh &mesh, double tol = 1e-6);
+        Spliter(grid::Grid &grid, Mesh &mesh, double tol = 1e-4, double ext = 1e-2);
         ~Spliter();
         Fragments fragments;
     private:
@@ -78,13 +80,16 @@ namespace stl {
         int faceNum, vertNum;
 
         Locks locks;
-        double tol, htol;
+        double tol, ext;
 
         Shape Slice(Mesh &mesh, double pos, int dir);
         void SliceX(grid::Grid &grid, Mesh &mesh, int i);
         void SliceY(grid::Grid &grid, Mesh &mesh, int j);
         void SliceZ(grid::Grid &grid, Mesh &mesh, int k);
     };
+
+    // TODO
+    std::map<int, Shape> extract_boundary(std::map<int, Shape> &a, grid::Grid &grid, int dir, double tol);
 }
 
 stl::Fragments& operator+=(stl::Fragments &a, stl::Fragments &b);

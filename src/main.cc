@@ -31,10 +31,12 @@ auto export_svg(string file, map<int, stl::Shape> &shapes, function<bool(int)> t
             map.add(ptr->polys);
         }
         for (auto ptr : list) {
-            map.map(ptr->polys, "fill:blue;stroke:black");
+            map.map(ptr->polys, "fill:blue;stroke:black;stroke-width:0.1");
         }
     }
 }
+
+constexpr double TOL = 1e-6, EXT = 1e-2;
 
 auto solve() {
     auto proj = cst::Project("C:\\Projects\\fim-example.cst", "2019", true, true);
@@ -44,8 +46,11 @@ auto solve() {
     auto start = utils::clockNow();
     auto mats = map<string, stl::Fragments>();
     for (auto &solid : proj.solids) {
-        auto mesh = stl::load(solid.stl);
-        auto fragments = stl::Spliter(grid, mesh).fragments;
+        auto mesh = stl::load(solid.stl, TOL);
+        // used when merging all metals
+        mesh.order = mat_priority[solid.material];
+
+        auto fragments = stl::Spliter(grid, mesh, TOL, EXT).fragments;
         if (mats.count(solid.material)) {
             mats[solid.material] += fragments;
         } else {
@@ -74,6 +79,12 @@ auto solve() {
             a -= mats[dielecs[j]];
         }
         a -= allMetal;
+    }
+
+    auto bound = stl::extract_boundary(allMetal.z, grid, 2, EXT);
+    for (int k = 0; k < grid.nz; k ++) {
+        export_svg("ALL_METAL.z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
+            bound, [&, k](int n) { return grid.GetIndex(n).z == k; });
     }
 
     // debug

@@ -1,9 +1,11 @@
 #include "stl.h"
 #include "ctpl_stl.h"
+#include "utils.h"
 
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <set>
 
 using namespace std;
 using namespace stl;
@@ -20,8 +22,16 @@ inline __host__ __device__ double3 operator+(double3 a, double3 b) {
     return double3 { a.x + b.x, a.y + b.y, a.z + b.z };
 }
 
+inline __host__ __device__ double3 operator+(double3 a, double b) {
+    return double3 { a.x + b, a.y + b, a.z + b };
+}
+
 inline __host__ __device__ double3 operator-(double3 a, double3 b) {
     return double3 { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
+inline __host__ __device__ double3 operator-(double3 a, double b) {
+    return double3 { a.x - b, a.y - b, a.z - b };
 }
 
 inline __host__ __device__ double3 operator*(double3 a, double b) {
@@ -33,6 +43,10 @@ inline __host__ __device__ double3 operator/(double3 a, double b) {
 }
 
 inline __host__ __device__ double3 lerp(double3 a, double3 b, double f) {
+    return a * (1 - f) + b * f;
+}
+
+inline __host__ __device__ double lerp(double a, double b, double f) {
     return a * (1 - f) + b * f;
 }
 
@@ -349,8 +363,8 @@ inline auto pt_2d(Point3D pt, int dir) {
                           Point { p.x, p.y };
 }
 
-auto make_poly(Loop &loop, int dir) {
-    Polygon poly;
+auto make_polys(Loop &loop, int dir) {
+    stl::Polygon poly;
     for (auto &pt : loop.pts) {
         bg::append(poly, pt_2d(pt, dir));
     }
@@ -365,6 +379,12 @@ template <typename T> auto operator+(MultiPolygon &shape, T &poly) {
 }
 
 template <typename T> auto operator-(MultiPolygon &shape, T &poly) {
+    MultiPolygon input;
+    bg::difference(shape, poly, input);
+    return input;
+}
+
+template <typename T> auto operator-(Box &shape, T &poly) {
     MultiPolygon input;
     bg::difference(shape, poly, input);
     return input;
@@ -389,6 +409,7 @@ inline auto operator+(Shape &a, Shape &b) {
     shape.polys = a.polys + b.polys;
     bg::envelope(shape.polys, shape.bound);
     shape.tree = a.tree + b.tree;
+    shape.order = max(a.order, b.order);
     return shape;
 }
 
@@ -397,6 +418,7 @@ inline auto operator-(Shape &a, Shape &b) {
     shape.polys = a.polys - b.polys;
     bg::envelope(shape.polys, shape.bound);
     shape.tree = a.tree + b.tree;
+    shape.order = max(a.order, b.order);
     return shape;
 }
 
@@ -407,6 +429,7 @@ inline auto operator*(Shape &a, Box &b) {
         a.tree.query(bgi::intersects(b), bgi::inserter(shape.tree));
         bg::envelope(shape.polys, shape.bound);
     }
+    shape.order = a.order;
     return shape;
 }
 
@@ -450,24 +473,86 @@ Fragments& operator-=(Fragments &a, Fragments &b) {
     return a;
 }
 
-auto get_lines(MultiPolygon &polys) {
-    MultiLine lines;
-    lines.resize(polys.size());
-    for (auto &poly : polys) {
-        Line edge;
-        for (auto &pt : poly.outer()) {
-            bg::append(edge, pt);
-        }
-        bg::append(lines, edge);
-        for (auto &loop : poly.inners()) {
-            Line edge;
-            for (auto &pt : loop) {
-                bg::append(edge, pt);
+struct FragmentShape {
+    MultiPolygon polys;
+};
+
+inline auto x_or_y_inside(Point &pt, Point &min, Point &max, double ext = 0) {
+    auto x = pt.x(), y = pt.y();
+    return (x > min.x() + ext && x < max.x() - ext) || (y > min.y() + ext && y < max.y() - ext);
+}
+
+inline auto get_normals_on_vertex(Shape &shape, Point &pt) {
+    vector<RTValue> norms;
+    shape.tree.query(bgi::intersects(pt), back_inserter(norms));
+    set<double3> ret;
+    for (auto &pair : norms) {
+        ret.insert(round_by(pair.second, 1e-2));
+    }
+    return ret;
+}
+
+inline auto get_normal_on_edge(set<double3> &s1, set<double3> &s2, double min = 1e-3) {
+    double dist = 1e9;
+    double3 a = { 0 }, b = { 0 };
+    for (auto &u : s1) {
+        for (auto &v : s2) {
+            auto len = length(u - v);
+            if (len < dist) {
+                a = u; b = v;
+                dist = len;
+                if (len < min) {
+                    break;
+                    break;
+                }
             }
-            bg::append(lines, edge);
         }
     }
-    return lines;
+    return (a + b) / 2;
+}
+
+auto extract_fragment(Shape &shape, Point &min, Point &max, double ext) {
+    Shape ret;
+    if (bg::area(shape.polys) < (max.x() - min.x()) * (max.y() - min.y()) * ext * 2) {
+        return ret;
+    }
+    ret.polys = Box(min, max) - shape.polys;
+    printf("polys\n");
+    for (auto &poly : shape.polys) {
+        printf("begin poly (%f %f), (%f %f)\n", min.x(), min.y(), max.x(), max.y());
+        auto outer = poly.outer();
+        auto normArr = vector<set<double3>>();
+        for (int i = 0, n = outer.size(); i < n; i ++) {
+            auto &pt = outer[i];
+            normArr.push_back(x_or_y_inside(pt, min, max) ?
+                get_normals_on_vertex(shape, pt) : set<double3>());
+        }
+        for (int i = 0, n = outer.size(); i < n - 1; i ++) {
+            auto &a = outer[i], &b = outer[i + 1];
+            if (x_or_y_inside(a, min, max) && x_or_y_inside(b, min, max)) {
+                auto norm = get_normal_on_edge(normArr[i], normArr[i + 1]);
+                // TODO: sum with normals
+                printf("edge %d: (%f %f), (%f %f): normal %f %f %f\n",
+                    i, a.x(), a.y(), b.x(), b.y(), norm.x, norm.y, norm.z);
+            }
+        }
+        printf("end poly\n");
+    }
+    return ret;
+}
+
+map<int, Shape> stl::extract_boundary(map<int, Shape> &frags, grid::Grid &grid, int dir, double ext) {
+    map<int, Shape> ret;
+    for (auto &pair : frags) {
+        auto g = grid.GetIndex(pair.first);
+        auto min = double3 { grid.xs[g.x], grid.ys[g.y], grid.zs[g.z] } - ext / 2,
+            max = double3 { grid.xs[g.x+1], grid.ys[g.y+1], grid.zs[g.z+1] } + ext / 2;
+        auto shape = extract_fragment(pair.second, pt_2d({ min }, dir), pt_2d({ max }, dir), ext);
+        if (shape.polys.size()) {
+            ret[pair.first] = shape;
+        }
+    }
+    return ret;
 }
 
 Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
@@ -482,6 +567,7 @@ Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
     from_device(idx, 1, &bucketLen);
 
     Shape shape;
+    shape.order = mesh.order;
     if (bucketLen == 0) {
         cudaFree(bucket);
         cudaFree(idx);
@@ -506,12 +592,12 @@ Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
 
     for (auto &loop : loops) {
         if (!loop.hole) {
-            shape.polys = shape.polys + make_poly(loop, dir);
+            shape.polys = shape.polys + make_polys(loop, dir);
         }
     }
     for (auto &loop : loops) {
         if (loop.hole) {
-            shape.polys = shape.polys - make_poly(loop, dir);
+            shape.polys = shape.polys - make_polys(loop, dir);
         }
     }
 
@@ -540,13 +626,14 @@ auto check_edges(Shape &shape) {
 }
 
 void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
-    auto a = Slice(mesh, xs[i] - htol, DIR_X),
-        b = Slice(mesh, xs[i] + htol, DIR_X),
+    auto a = Slice(mesh, xs[i] - tol/2, DIR_X),
+        b = Slice(mesh, xs[i] + tol/2, DIR_X),
         shape = a + b;
     for (int j = 0; j < ny - 1; j ++) {
-        auto stride = shape * Box({ ys[j] - htol, min.z }, { ys[j + 1] + htol, max.z });
+        auto dy = ys[j + 1] - ys[j];
+        auto stride = shape * Box({ ys[j] - ext, min.z }, { ys[j + 1] + ext, max.z });
         for (int k = 0; k < nz - 1; k ++) {
-            auto patch = stride * Box({ min.y, zs[k] - htol }, { max.y, zs[k + 1] + htol });
+            auto patch = stride * Box({ min.y, zs[k] - ext }, { max.y, zs[k + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.x);
                 fragments.x[grid.GetIndex(i, j, k)] = patch;
@@ -556,13 +643,13 @@ void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
 }
 
 void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
-    auto a = Slice(mesh, ys[j] - htol, DIR_Y),
-        b = Slice(mesh, ys[j] + htol, DIR_Y),
+    auto a = Slice(mesh, ys[j] - tol/2, DIR_Y),
+        b = Slice(mesh, ys[j] + tol/2, DIR_Y),
         shape = a + b;
     for (int k = 0; k < nz - 1; k ++) {
-        auto stride = shape * Box({ zs[k] - htol, min.x }, { zs[k + 1] + htol, max.x });
+        auto stride = shape * Box({ zs[k] - ext, min.x }, { zs[k + 1] + ext, max.x });
         for (int i = 0; i < nx - 1; i ++) {
-            auto patch = stride * Box({ min.z, xs[i] - htol }, { max.z, xs[i + 1] + htol });
+            auto patch = stride * Box({ min.z, xs[i] - ext }, { max.z, xs[i + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.y);
                 fragments.y[grid.GetIndex(i, j, k)] = patch;
@@ -572,28 +659,24 @@ void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
 }
 
 void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
-    auto a = Slice(mesh, zs[k] - htol, DIR_Z),
-        b = Slice(mesh, zs[k] + htol, DIR_Z),
+    auto a = Slice(mesh, zs[k] - tol/2, DIR_Z),
+        b = Slice(mesh, zs[k] + tol/2, DIR_Z),
         shape = a + b;
     for (int i = 0; i < nx - 1; i ++) {
-        auto stride = shape * Box({ xs[i] - htol, min.y }, { xs[i + 1] + htol, max.y });
+        auto stride = shape * Box({ xs[i] - ext, min.y }, { xs[i + 1] + ext, max.y });
         for (int j = 0; j < ny - 1; j ++) {
-            auto patch = stride * Box({ min.x, ys[j] - htol }, { max.x, ys[j + 1] + htol });
+            auto patch = stride * Box({ min.x, ys[j] - ext }, { max.x, ys[j + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.z);
                 fragments.z[grid.GetIndex(i, j, k)] = patch;
-                // TODO
-                if (k == 27) {
-                    check_edges(shape);
-                }
             }
         }
     }
 }
 
-stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, double tol) {
+stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, double tol, double ext) {
     this->tol = tol;
-    this->htol = tol / 2;
+    this->ext = ext;
     min = mesh.min; max = mesh.max;
     xs = grid.xs; ys = grid.ys; zs = grid.zs;
     nx = grid.nx; ny = grid.ny; nz = grid.nz;
