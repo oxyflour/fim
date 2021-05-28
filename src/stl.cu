@@ -511,9 +511,10 @@ inline auto get_normal_on_edge(set<double3> &s1, set<double3> &s2, double min = 
     return (a + b) / 2;
 }
 
-auto extract_fragment(Shape &shape, Point &min, Point &max, double ext) {
+auto extract_patch(Shape &shape, Point &min, Point &max, double ext) {
+    auto area = bg::area(shape.polys);
     Shape ret;
-    if (bg::area(shape.polys) < (max.x() - min.x()) * (max.y() - min.y()) * ext * 2) {
+    if (area < (max.x() - min.x()) * (max.y() - min.y()) * ext * 2) {
         return ret;
     }
     ret.polys = Box(min, max) - shape.polys;
@@ -521,11 +522,12 @@ auto extract_fragment(Shape &shape, Point &min, Point &max, double ext) {
     for (auto &poly : shape.polys) {
         printf("begin poly (%f %f), (%f %f)\n", min.x(), min.y(), max.x(), max.y());
         auto outer = poly.outer();
-        auto normArr = vector<set<double3>>();
+        auto normArr = vector<set<double3>>(outer.size());
         for (int i = 0, n = outer.size(); i < n; i ++) {
-            auto &pt = outer[i];
-            normArr.push_back(x_or_y_inside(pt, min, max) ?
-                get_normals_on_vertex(shape, pt) : set<double3>());
+            auto &p = outer[i];
+            if (x_or_y_inside(p, min, max)) {
+                normArr[i] = get_normals_on_vertex(shape, p);
+            }
         }
         for (int i = 0, n = outer.size(); i < n - 1; i ++) {
             auto &a = outer[i], &b = outer[i + 1];
@@ -547,7 +549,7 @@ map<int, Shape> stl::extract_boundary(map<int, Shape> &frags, grid::Grid &grid, 
         auto g = grid.GetIndex(pair.first);
         auto min = double3 { grid.xs[g.x], grid.ys[g.y], grid.zs[g.z] } - ext / 2,
             max = double3 { grid.xs[g.x+1], grid.ys[g.y+1], grid.zs[g.z+1] } + ext / 2;
-        auto shape = extract_fragment(pair.second, pt_2d({ min }, dir), pt_2d({ max }, dir), ext);
+        auto shape = extract_patch(pair.second, pt_2d({ min }, dir), pt_2d({ max }, dir), ext);
         if (shape.polys.size()) {
             ret[pair.first] = shape;
         }
