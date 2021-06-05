@@ -76,6 +76,14 @@ static int3 operator+ (const int3 &a, const int3 &b) {
     return int3 { a.x + b.x, a.y + b.y, a.z + b.z };
 }
 
+static int3 operator- (const int3 &a, const int b) {
+    return int3 { a.x - b, a.y - b, a.z - b };
+}
+
+static int3 operator+ (const int3 &a, const int b) {
+    return int3 { a.x + b, a.y + b, a.z + b };
+}
+
 static int3 abs(int3 &a) {
     return int3 { ::abs(a.x), ::abs(a.y), ::abs(a.z) };
 }
@@ -90,6 +98,82 @@ static float3 operator- (const float3 &a, const float3 &b) {
 
 static float length(const float3 &a) {
     return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+}
+
+inline __host__ __device__ double fmin(double a, double b) {
+    return a < b ? a : b;
+}
+
+inline __host__ __device__ double fmax(double a, double b) {
+    return a > b ? a : b;
+}
+
+inline __host__ __device__ double3 operator+(double3 a, double3 b) {
+    return double3 { a.x + b.x, a.y + b.y, a.z + b.z };
+}
+
+inline __host__ __device__ double3 operator+(double3 a, double b) {
+    return double3 { a.x + b, a.y + b, a.z + b };
+}
+
+inline __host__ __device__ double3 operator-(double3 a, double3 b) {
+    return double3 { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
+inline __host__ __device__ double3 operator-(double3 a, double b) {
+    return double3 { a.x - b, a.y - b, a.z - b };
+}
+
+inline __host__ __device__ double3 operator*(double3 a, double b) {
+    return double3 { a.x * b, a.y * b, a.z * b };
+}
+
+inline __host__ __device__ double3 operator/(double3 a, double b) {
+    return double3 { a.x / b, a.y / b, a.z / b };
+}
+
+inline __host__ __device__ double3 lerp(double3 a, double3 b, double f) {
+    return a * (1 - f) + b * f;
+}
+
+inline __host__ __device__ double lerp(double a, double b, double f) {
+    return a * (1 - f) + b * f;
+}
+
+inline __host__ __device__ double dot(double3 a, double3 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+inline __host__ __device__ double length(double3 a) {
+    return sqrt(dot(a, a));
+}
+
+inline __host__ __device__ double3 cross(double3 a, double3 b) { 
+    return double3 { a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x }; 
+}
+
+inline __host__ __device__ double3 normalize(double3 v) {
+    return v / length(v);
+}
+
+inline __host__ __device__ double3 fmin(double3 a, double3 b) { 
+    return double3 { fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z) }; 
+}
+
+inline __host__ __device__ double3 fmax(double3 a, double3 b) { 
+    return double3 { fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z) }; 
+}
+
+inline __host__ __device__ double round_by(double a, double tol) {
+    return round(a / tol) * tol;
+}
+
+inline __host__ __device__ double3 round_by(double3 a, double tol) {
+    return double3 { round_by(a.x, tol), round_by(a.y, tol), round_by(a.z, tol) };
+}
+
+inline bool operator<(double3 a, double3 b) {
+    return (a.x < b.x || (a.x == b.x && a.y < b.y) || (a.x == b.x && a.y == b.y && a.z < b.z));
 }
 
 #endif

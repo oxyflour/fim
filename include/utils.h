@@ -7,8 +7,9 @@
 #define UTILS_H
 
 namespace utils {
-    std::wstring utf8ToWstring(const std::string& str);
-    std::string wstringToUtf8(const std::wstring& str);
+    using namespace std;
+    wstring utf8ToWstring(const string& str);
+    string wstringToUtf8(const wstring& str);
 }
 
 #ifdef _WIN32
@@ -36,50 +37,49 @@ const auto PBWIDTH = 60;
 namespace utils {
     void outputProgress(double percentage);
 
-    std::string random(const int len);
+    string random(const int len);
 
-    std::wstring utf8ToWstring(const std::string& str);
-    std::string wstringToUtf8(const std::wstring& str);
+    wstring utf8ToWstring(const string& str);
+    string wstringToUtf8(const wstring& str);
 
-    std::string readFile(const std::string& fname);
-    void writeFile(const std::string& fname, const std::string& content);
+    string readFile(const string& fname);
+    void writeFile(const string& fname, const string& content);
 
-    float interp1(const std::vector<float> &xs, const std::vector<float> &ys, const float x);
+    float interp1(const vector<float> &xs, const vector<float> &ys, const float x);
 
-    template <typename T> std::vector<T> range(T from, T to, T delta) {
-        auto ret = std::vector<T>();
+    template <typename T> vector<T> range(T from, T to, T delta) {
+        auto ret = vector<T>();
         for (auto val = from; val < to; val += delta) {
             ret.push_back(val);
         }
         return ret;
     }
-    template <typename T> std::vector<T> inline range(T from, T to) {
+    template <typename T> vector<T> inline range(T from, T to) {
         return range(from, to, 1);
     }
-    template <typename T> std::vector<T> inline range(T to) {
+    template <typename T> vector<T> inline range(T to) {
         return range(0, to, 1);
     }
 
     typedef struct DLL {
-        DLL(std::string path);
+        DLL(string path);
         ~DLL();
         lib_type module;
-        std::string path;
-        std::map<std::string, FARPROC> procs;
-        lib_func __stdcall getProc(std::string name);
+        string path;
+        map<string, FARPROC> procs;
+        lib_func __stdcall getProc(string name);
     } DLL;
 
-    // well, it's impossible to declare auto return type of a function now
-    template <class T, class F> auto map(std::vector<T> &arr, F fun) {
-        auto ret = std::vector<typename std::result_of<F(const typename T&)>::type>(arr.size());
+    template <class T, class F> auto fmap(vector<T> &arr, F fun) {
+        auto ret = vector<typename result_of<F(const typename T&)>::type>(arr.size());
         for (const auto &item : arr) {
             ret.push_back(fun(item));
         }
         return ret;
     };
 
-    std::chrono::system_clock::time_point clockNow();
-    float secondsSince(std::chrono::system_clock::time_point &start);
+    chrono::system_clock::time_point clockNow();
+    float secondsSince(chrono::system_clock::time_point &start);
 }
 
 #endif

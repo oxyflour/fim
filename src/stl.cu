@@ -10,82 +10,6 @@
 using namespace std;
 using namespace stl;
 
-inline __host__ __device__ double fmin(double a, double b) {
-    return a < b ? a : b;
-}
-
-inline __host__ __device__ double fmax(double a, double b) {
-    return a > b ? a : b;
-}
-
-inline __host__ __device__ double3 operator+(double3 a, double3 b) {
-    return double3 { a.x + b.x, a.y + b.y, a.z + b.z };
-}
-
-inline __host__ __device__ double3 operator+(double3 a, double b) {
-    return double3 { a.x + b, a.y + b, a.z + b };
-}
-
-inline __host__ __device__ double3 operator-(double3 a, double3 b) {
-    return double3 { a.x - b.x, a.y - b.y, a.z - b.z };
-}
-
-inline __host__ __device__ double3 operator-(double3 a, double b) {
-    return double3 { a.x - b, a.y - b, a.z - b };
-}
-
-inline __host__ __device__ double3 operator*(double3 a, double b) {
-    return double3 { a.x * b, a.y * b, a.z * b };
-}
-
-inline __host__ __device__ double3 operator/(double3 a, double b) {
-    return double3 { a.x / b, a.y / b, a.z / b };
-}
-
-inline __host__ __device__ double3 lerp(double3 a, double3 b, double f) {
-    return a * (1 - f) + b * f;
-}
-
-inline __host__ __device__ double lerp(double a, double b, double f) {
-    return a * (1 - f) + b * f;
-}
-
-inline __host__ __device__ double dot(double3 a, double3 b) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-inline __host__ __device__ double length(double3 a) {
-    return sqrt(dot(a, a));
-}
-
-inline __host__ __device__ double3 cross(double3 a, double3 b) { 
-    return double3 { a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x }; 
-}
-
-inline __host__ __device__ double3 normalize(double3 v) {
-    return v / length(v);
-}
-
-inline __host__ __device__ double3 fmin(double3 a, double3 b) { 
-    return double3 { fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z) }; 
-}
-
-inline __host__ __device__ double3 fmax(double3 a, double3 b) { 
-    return double3 { fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z) }; 
-}
-
-inline __host__ __device__ double round_by(double a, double tol) {
-    return round(a / tol) * tol;
-}
-
-inline __host__ __device__ double3 round_by(double3 a, double tol) {
-    return double3 { round_by(a.x, tol), round_by(a.y, tol), round_by(a.z, tol) };
-}
-
-inline bool operator<(double3 a, double3 b) {
-    return (a.x < b.x || (a.x == b.x && a.y < b.y) || (a.x == b.x && a.y == b.y && a.z < b.z));
-}
-
 auto swap_xy(int2 &a) {
     auto t = a.x;
     a.x = a.y;
@@ -231,6 +155,34 @@ void save_loop(string file, Loop &loop, double3 offset) {
     save(file, mesh);
 }
 
+Mesh stl::load(vector<double3> verts, vector<int3> faces, double tol) {
+    Mesh mesh;
+    map<double3, int> indices;
+    map<int, int> pts;
+
+    for (int i = 0; i < verts.size(); i ++) {
+        auto pt = verts[i];
+        auto rounded = round_by(pt, tol);
+        if (!indices.count(rounded)) {
+            indices[rounded] = mesh.vertices.size();
+            mesh.vertices.push_back(rounded);
+        }
+        pts[i] = indices[rounded];
+        mesh.min = fmin(mesh.min, pt);
+        mesh.max = fmax(mesh.max, pt);
+    }
+    for (auto fv : faces) {
+        int idx[3] = { pts[fv.x], pts[fv.y], pts[fv.z] };
+        if (idx[0] != idx[1] && idx[1] != idx[2] && idx[2] != idx[0]) {
+            mesh.faces.push_back(int3 { idx[0], idx[1], idx[2] });
+        }
+    }
+    mesh.normals.resize(mesh.faces.size());
+    mesh.bounds.resize(mesh.faces.size());
+
+    return mesh;
+}
+
 Mesh stl::load(string file, double tol) {
     Mesh mesh;
     map<double3, int> indices;
@@ -372,6 +324,14 @@ auto make_polys(Loop &loop, int dir) {
     return poly;
 }
 
+stl::Point operator+(stl::Point &a, stl::Point &b) {
+    return stl::Point { a.x() + b.x(), a.y() + b.y() };
+}
+
+stl::Point operator/(stl::Point &a, double f) {
+    return stl::Point { a.x() / f, a.y() / f };
+}
+
 template <typename T> auto operator+(MultiPolygon &shape, T &poly) {
     MultiPolygon input;
     bg::union_(shape, poly, input);
@@ -473,42 +433,22 @@ Fragments& operator-=(Fragments &a, Fragments &b) {
     return a;
 }
 
-struct FragmentShape {
-    MultiPolygon polys;
-};
-
 inline auto x_or_y_inside(Point &pt, Point &min, Point &max, double ext = 0) {
     auto x = pt.x(), y = pt.y();
     return (x > min.x() + ext && x < max.x() - ext) || (y > min.y() + ext && y < max.y() - ext);
 }
 
-inline auto get_normals_on_vertex(Shape &shape, Point &pt) {
+inline auto get_normal(Shape &shape, Point &pt) {
     vector<RTValue> norms;
     shape.tree.query(bgi::intersects(pt), back_inserter(norms));
-    set<double3> ret;
+    double3 ret;
     for (auto &pair : norms) {
-        ret.insert(round_by(pair.second, 1e-2));
+        ret = ret + pair.second;
+    }
+    if (norms.size()) {
+        ret = ret / norms.size();
     }
     return ret;
-}
-
-inline auto get_normal_on_edge(set<double3> &s1, set<double3> &s2, double min = 1e-3) {
-    double dist = 1e9;
-    double3 a = { 0 }, b = { 0 };
-    for (auto &u : s1) {
-        for (auto &v : s2) {
-            auto len = length(u - v);
-            if (len < dist) {
-                a = u; b = v;
-                dist = len;
-                if (len < min) {
-                    break;
-                    break;
-                }
-            }
-        }
-    }
-    return (a + b) / 2;
 }
 
 auto extract_patch(Shape &shape, Point &min, Point &max, double ext) {
@@ -522,17 +462,10 @@ auto extract_patch(Shape &shape, Point &min, Point &max, double ext) {
     for (auto &poly : shape.polys) {
         printf("begin poly (%f %f), (%f %f)\n", min.x(), min.y(), max.x(), max.y());
         auto outer = poly.outer();
-        auto normArr = vector<set<double3>>(outer.size());
-        for (int i = 0, n = outer.size(); i < n; i ++) {
-            auto &p = outer[i];
-            if (x_or_y_inside(p, min, max)) {
-                normArr[i] = get_normals_on_vertex(shape, p);
-            }
-        }
         for (int i = 0, n = outer.size(); i < n - 1; i ++) {
-            auto &a = outer[i], &b = outer[i + 1];
+            auto &a = outer[i], &b = outer[i + 1], c = (a + b) / 2;
             if (x_or_y_inside(a, min, max) && x_or_y_inside(b, min, max)) {
-                auto norm = get_normal_on_edge(normArr[i], normArr[i + 1]);
+                auto norm = get_normal(shape, c);
                 // TODO: sum with normals
                 printf("edge %d: (%f %f), (%f %f): normal %f %f %f\n",
                     i, a.x(), a.y(), b.x(), b.y(), norm.x, norm.y, norm.z);

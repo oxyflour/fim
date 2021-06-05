@@ -29,10 +29,11 @@
 
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
 
-#include "cuda.h"
 #include "occ.h"
 #include "utils.h"
+#include "utils/cuda.h"
 #include "utils/check.h"
 
 using namespace std;
@@ -223,6 +224,34 @@ TopoDS_Shape Builder::box(float3 &min, float3 &max) {
 
 TopoDS_Shape Builder::line(float3 &from, float3 &to) {
     return BRepBuilderAPI_MakeEdge(gp_Pnt(from.x, from.y, from.z), gp_Pnt(to.x, to.y, to.z)).Shape();
+}
+
+Mesh Mesh::triangulate(TopoDS_Shape &shape) {
+    vector<double3> verts;
+    vector<int3> faces;
+    BRepMesh_IncrementalMesh(shape, 1);
+    for (auto &fv : Shape::find(shape, TopAbs_FACE)) {
+        TopLoc_Location location;
+        auto face = TopoDS::Face(fv);
+        auto reversed = face.Orientation() == TopAbs_REVERSED;
+        auto triangles = BRep_Tool::Triangulation(face, location);
+        if (!triangles.IsNull()) {
+            int start = verts.size();
+            for (int i = 1, n = triangles->NbNodes(); i <= n; i ++) {
+                auto node = triangles->Node(i);
+                auto pt = node.Transformed(location.Transformation());
+                verts.push_back(double3 { pt.X(), pt.Y(), pt.Z() });
+            }
+            for (int i = 1, n = triangles->NbTriangles(); i <= n; i ++) {
+                auto tri = triangles->Triangle(i);
+                int a, b, c;
+                tri.Get(a, b, c);
+                auto d = reversed ? int3 { a, c, b } : int3 { a, b, c };
+                faces.push_back(d + start - 1);
+            }
+        }
+    }
+    return Mesh { verts, faces };
 }
 
 void calcWireNormal(bound_type &bound, vector<TopoDS_Shape> &faces, int dir) {

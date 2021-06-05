@@ -8,9 +8,11 @@
 #define FIT_H
 
 namespace fit {
+    using namespace std;
+
     struct Port {
         float3 src, dst;
-        std::vector<int3> pos;
+        vector<int3> pos;
         int idx;
         int dir;
         float imp = 50;
@@ -30,7 +32,7 @@ namespace fit {
         grid::Grid *grid;
         float *le, *re, *lh, *rh;
         void Add(Port &port);
-        std::vector<Port> ports;
+        vector<Port> ports;
     };
 }
 

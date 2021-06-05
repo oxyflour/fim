@@ -63,6 +63,9 @@ download_extract(
 download_extract(
   https://dl.bintray.com/boostorg/release/1.75.0/source/boost_1_75_0.zip
   boost)
+download_extract(
+  https://prebuilt.oss-cn-shanghai.aliyuncs.com/clipper_ver6.4.2.zip
+  clipper)
 
 # generate include/generated/*.h
 # https://stackoverflow.com/questions/2937128/cmake-add-custom-command-not-being-run
@@ -70,7 +73,7 @@ file(GLOB INC_HEADERS "include/*.h")
 add_custom_command(
   OUTPUT ${CMAKE_SOURCE_DIR}/include/generated/inc_chunk_cu.h
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/tool/gen.cmake
-  DEPENDS src/kernel.cu INC_HEADERS
+  DEPENDS src/kernel.cu tool/run.bas ${INC_HEADERS}
 )
 add_custom_target(
   include_generated

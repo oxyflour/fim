@@ -8,14 +8,16 @@
 #define OCC_H
 
 namespace occ {
+    using namespace std;
+
     struct bound_type {
         double xmin, ymin, zmin, xmax, ymax, zmax;
         bool intersects(bound_type &bound, double tol);
     };
 
     struct Step {
-        static TopoDS_Shape load(std::string file);
-        static void save(std::string file, TopoDS_Shape &shape);
+        static TopoDS_Shape load(string file);
+        static void save(string file, TopoDS_Shape &shape);
     };
 
     struct Bool {
@@ -27,30 +29,36 @@ namespace occ {
         static TopoDS_Shape box(float3 &min, float3 &max);
         static TopoDS_Shape line(float3 &from, float3 &to);
         static TopoDS_Shape plane(float3 &pos, float3 &dir);
-        static TopoDS_Shape component(std::vector<TopoDS_Shape> &shapes);
+        static TopoDS_Shape component(vector<TopoDS_Shape> &shapes);
+    };
+
+    struct Mesh {
+        vector<double3> verts;
+        vector<int3> faces;
+        static Mesh triangulate(TopoDS_Shape &shape);
     };
 
     struct Shape {
         static bound_type bound(const TopoDS_Shape &shape);
-        static std::vector<TopoDS_Shape> find(TopoDS_Shape &shape, TopAbs_ShapeEnum type);
+        static vector<TopoDS_Shape> find(TopoDS_Shape &shape, TopAbs_ShapeEnum type);
     };
 
     struct Mesher {
         Mesher(grid::Grid &grid, TopoDS_Shape &shape, float unit = 1.f);
-        void Save(std::string file);
-        static void Merge(grid::Grid &grid, std::vector<Mesher> &mats, std::vector<int> &priority);
+        void Save(string file);
+        static void Merge(grid::Grid &grid, vector<Mesher> &mats, vector<int> &priority);
 
-        std::vector<float> sx, sy, sz, lx, ly, lz;
-        std::map<int, TopoDS_Shape> msx, msy, msz, mlx, mly, mlz;
+        vector<float> sx, sy, sz, lx, ly, lz;
+        map<int, TopoDS_Shape> msx, msy, msz, mlx, mly, mlz;
     private:
         int nx, ny, nz;
-        std::vector<double> xs, ys, zs;
+        vector<double> xs, ys, zs;
 
         TopoDS_Shape shape;
         TopoDS_Shape faces;
         double xmin, ymin, zmin, xmax, ymax, zmax;
 
-        std::mutex lock;
+        mutex lock;
         void MeshX(int i0, int i1);
         void MeshY(int j0, int j1);
         void MeshZ(int k0, int k1);

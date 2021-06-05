@@ -12,16 +12,18 @@
 #define CST_H
 
 namespace cst {
+    using namespace std;
+
     struct port_type {
         float3 src, dst;
     };
 
     struct excitation_type {
-        std::vector<float> x, y;
+        vector<float> x, y;
     };
 
     struct solid_type {
-        std::string name, material, stl;
+        string name, material, stl;
     };
 
     struct units_type {
@@ -29,31 +31,31 @@ namespace cst {
     };
 
     struct Project {
-        Project(std::string path, std::string version, bool useCache = true, bool keepCache = false);
+        Project(string path, string version, bool useCache = true, bool keepCache = false);
         ~Project();
 
         // will be filled by MakeCacheAndLoadSettings
         float dt = -1;
-        std::vector<port_type> ports;
-        std::vector<solid_type> solids;
+        vector<port_type> ports;
+        vector<solid_type> solids;
         excitation_type excitation;
         units_type units;
-        std::vector<double> xs, ys, zs;
+        vector<double> xs, ys, zs;
 
 #ifdef USE_CST_DLL
         grid::Grid GetHexGrid();
         float *GetMatrix(int mat);
-        double *Get1DResult(std::string tree, int num, int type);
+        double *Get1DResult(string tree, int num, int type);
 #endif
 
 private:
-        std::string path;
-        std::string version;
+        string path;
+        string version;
         CSTProjHandle handle;
 
         bool keepCache = false;
-        std::string cachePath;
-        std::string MakeCacheAndLoadSettings(std::string cst, bool useCache);
+        string cachePath;
+        string MakeCacheAndLoadSettings(string cst, bool useCache);
 
 #ifdef USE_CST_DLL
         utils::DLL *dll;

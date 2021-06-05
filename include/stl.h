@@ -19,6 +19,8 @@
 #include <boost/geometry/index/rtree.hpp>
 
 namespace stl {
+    using namespace std;
+
     namespace bg = boost::geometry;
     typedef bg::model::d2::point_xy<double> Point;
     typedef bg::model::polygon<Point> Polygon;
@@ -29,7 +31,7 @@ namespace stl {
     typedef bg::model::box<Point> Box;
 
     namespace bgi = boost::geometry::index;
-    typedef std::pair<Segment, double3> RTValue;
+    typedef pair<Segment, double3> RTValue;
     typedef bgi::rtree<RTValue, bgi::quadratic<8, 4>> RTree;
 
     struct Shape {
@@ -47,22 +49,23 @@ namespace stl {
 
     struct Mesh {
         int order;
-        std::vector<double3> vertices;
-        std::vector<int3> faces;
-        std::vector<double3> normals;
-        std::vector<Bound> bounds;
+        vector<double3> vertices;
+        vector<int3> faces;
+        vector<double3> normals;
+        vector<Bound> bounds;
         double3 min = { 1e9, 1e9, 1e9 }, max = { -1e9, -1e9, -1e9 };
     };
 
-    void save(std::string file, Mesh &mesh);
-    Mesh load(std::string file, double tol = 1e-4);
+    void save(string file, Mesh &mesh);
+    Mesh load(string file, double tol = 1e-4);
+    Mesh load(vector<double3> verts, vector<int3> faces, double tol = 1e-4);
 
     struct Fragments {
-        std::map<int, Shape> x, y, z;
+        map<int, Shape> x, y, z;
     };
 
     struct Locks {
-        std::mutex x, y, z;
+        mutex x, y, z;
     };
 
     struct Spliter {
@@ -70,7 +73,7 @@ namespace stl {
         ~Spliter();
         Fragments fragments;
     private:
-        std::vector<double> xs, ys, zs;
+        vector<double> xs, ys, zs;
         int nx, ny, nz;
         double3 min, max;
 
@@ -89,10 +92,12 @@ namespace stl {
     };
 
     // TODO
-    std::map<int, Shape> extract_boundary(std::map<int, Shape> &a, grid::Grid &grid, int dir, double tol);
+    map<int, Shape> extract_boundary(map<int, Shape> &a, grid::Grid &grid, int dir, double tol);
 }
 
 stl::Fragments& operator+=(stl::Fragments &a, stl::Fragments &b);
 stl::Fragments& operator-=(stl::Fragments &a, stl::Fragments &b);
+stl::Point operator+(stl::Point &a, stl::Point &b);
+stl::Point operator/(stl::Point &a, double f);
 
 #endif

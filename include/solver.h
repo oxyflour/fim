@@ -2,9 +2,11 @@
 #include "kernel.h"
 
 namespace solver {
+    using namespace std;
+
     class Solver {
     public:
-        Solver(fit::Matrix &mat, float dt, std::vector<fit::Port> &ports);
+        Solver(fit::Matrix &mat, float dt, vector<fit::Port> &ports);
         ~Solver();
         fit::Coefficient *coe;
         virtual float Step(float s);
@@ -18,7 +20,7 @@ namespace solver {
             *LEx, *LEy, *LEz, *LHx, *LHy, *LHz,
             *REx, *REy, *REz, *RHx, *RHy, *RHz;
     public:
-        CPUSolver(fit::Matrix &mats, float dt, std::vector<fit::Port> &ports);
+        CPUSolver(fit::Matrix &mats, float dt, vector<fit::Port> &ports);
         ~CPUSolver();
         virtual float Step(float s);
     };
@@ -29,7 +31,7 @@ namespace solver {
         decltype(&step_$i) FnStep;
         decltype(&quit_$i) FnQuit;
     public:
-        GPUSolver(fit::Matrix &mats, float dt, std::vector<fit::Port> &ports);
+        GPUSolver(fit::Matrix &mats, float dt, vector<fit::Port> &ports);
         ~GPUSolver();
         virtual float Step(float s);
     };

@@ -11,11 +11,14 @@
 
 using namespace std;
 
+constexpr double TOL = 1e-6, EXT = 1e-2;
+
 auto is_dielec(string name) {
     return name != "PEC";
 }
 
-auto mat_priority = map<string, int>();
+auto mat_priority = map<string, int> {
+};
 
 auto export_svg(string file, map<int, stl::Shape> &shapes, function<bool(int)> test) {
     auto list = vector<stl::Shape *>();
@@ -36,9 +39,30 @@ auto export_svg(string file, map<int, stl::Shape> &shapes, function<bool(int)> t
     }
 }
 
-constexpr double TOL = 1e-6, EXT = 1e-2;
+auto min_delta(vector<double> arr) {
+    double ret = DBL_MAX;
+    for (int i = 0; i < arr.size() - 1; i ++) {
+        ret = min(ret, arr[i + 1] - arr[i]);
+    }
+    return ret;
+}
 
-auto solve() {
+auto export_fragment(string prefix, grid::Grid &grid, stl::Fragments &frags) {
+    for (int i = 0; i < grid.nx; i ++) {
+        export_svg(prefix + ".x-" + to_string(i) + "-" + to_string(grid.xs[i]) + ".svg",
+            frags.x, [&, i](int n) { return grid.GetIndex(n).x == i; });
+    }
+    for (int j = 0; j < grid.ny; j ++) {
+        export_svg(prefix + ".y-" + to_string(j) + "-" + to_string(grid.ys[j]) + ".svg",
+            frags.y, [&, j](int n) { return grid.GetIndex(n).y == j; });
+    }
+    for (int k = 0; k < grid.nz; k ++) {
+        export_svg(prefix + ".z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
+            frags.z, [&, k](int n) { return grid.GetIndex(n).z == k; });
+    }
+}
+
+auto make_mesh() {
     auto proj = cst::Project("C:\\Projects\\fim-example.cst", "2019", true, true);
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
@@ -90,22 +114,17 @@ auto solve() {
     // debug
     mats["ALL_METAL"] = allMetal;
     for (auto &[mat, frags] : mats) {
-        for (int i = 0; i < grid.nx; i ++) {
-            export_svg("mat-" + mat + ".x-" + to_string(i) + "-" + to_string(grid.xs[i]) + ".svg",
-                frags.x, [&, i](int n) { return grid.GetIndex(n).x == i; });
-        }
-        for (int j = 0; j < grid.ny; j ++) {
-            export_svg("mat-" + mat + ".y-" + to_string(j) + "-" + to_string(grid.ys[j]) + ".svg",
-                frags.y, [&, j](int n) { return grid.GetIndex(n).y == j; });
-        }
-        for (int k = 0; k < grid.nz; k ++) {
-            export_svg("mat-" + mat + ".z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
-                frags.z, [&, k](int n) { return grid.GetIndex(n).z == k; });
-        }
+        export_fragment("mat-" + mat, grid, frags);
     }
+}
 
+auto solve() {
+    auto box = occ::Builder::box(float3 { 0, 0, 0 }, float3 { 3, 3, 3 });
+    auto grid = grid::Grid({ -1, 0, 1, 2, 3, 4 }, { -1, 0, 1, 2, 3, 4 }, { -1, 0, 1, 2, 3, 4 });
+    auto geo = occ::Mesh::triangulate(box);
+    auto mesh = stl::Spliter(grid, stl::load(geo.verts, geo.faces));
+    export_fragment("a-test", grid, mesh.fragments);
 /*
-
     CHECK(proj.dt > 0, "cannot get dt from project");
     cout << "INFO: dt = " << proj.dt * 1e9 << " ns" << endl;
 
