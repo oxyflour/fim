@@ -119,7 +119,6 @@ auto make_mesh() {
 }
 
 auto solve() {
-    //auto shape = occ::Step::load("D:\\tri.stp");
     auto center = float3 { 1.5, 1.5, 1.5 };
     auto shape = occ::Bool::fuse(
         occ::Bool::cut(

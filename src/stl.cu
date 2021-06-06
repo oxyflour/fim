@@ -450,7 +450,7 @@ inline auto x_or_y_inside(Point &pt, Point &min, Point &max, double ext = 0) {
     return (x > min.x() + ext && x < max.x() - ext) || (y > min.y() + ext && y < max.y() - ext);
 }
 
-inline auto get_normal(Shape &shape, Point &pt) {
+inline auto get_normal(Shape &shape, Point &pt, double tol) {
     vector<RTValue> norms;
     shape.tree.query(bgi::intersects(pt), back_inserter(norms));
     if (!norms.size()) {
@@ -459,9 +459,7 @@ inline auto get_normal(Shape &shape, Point &pt) {
         if (nearest.size()) {
             auto &pair = nearest[0];
             auto dist = bg::distance(pair.first, pt);
-            auto a = pair.first.first, b = pair.first.second;
-            auto len = bg::distance(a, b);
-            if (dist < len * 1e-3) {
+            if (dist < tol) {
                 norms.push_back(pair);
             }
         }
@@ -483,13 +481,14 @@ auto extract_patch(Shape &shape, Point &min, Point &max, int dir, double ext, do
     if (area < (max.x() - min.x()) * (max.y() - min.y()) * ext * 2) {
         return ret;
     }
+    auto tol = fmin(max.x() - min.x(), max.y() - min.y()) * 1e-2;
     //ret.polys = Box(min, max) - shape.polys;
     for (auto &poly : shape.polys) {
         auto outer = poly.outer();
         for (int i = 0, n = outer.size(); i < n - 1; i ++) {
             auto &a = outer[i], &b = outer[i + 1], c = (a + b) / 2;
             if (x_or_y_inside(c, min, max)) {
-                auto norm = get_normal(shape, c);
+                auto norm = get_normal(shape, c, tol);
                 auto v = pt_2d({ norm }, dir);
                 auto l = sqrt(v.x() * v.x() + v.y() * v.y());
                 if (l) {
