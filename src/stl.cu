@@ -494,28 +494,19 @@ inline auto x_or_y_inside(const Point &pt, const Point &min, const Point &max, d
 }
 
 inline auto get_normal(const Shape &shape, Point &pt, double tol) {
-    vector<RTValue> norms;
+    vector<RTPair> norms;
     shape.tree.query(bgi::intersects(pt), back_inserter(norms));
-    if (!norms.size()) {
-        vector <RTValue> nearest;
-        shape.tree.query(bgi::nearest(pt, 1), back_inserter(nearest));
-        if (nearest.size()) {
-            auto &pair = nearest[0];
-            auto dist = bg::distance(pair.first, pt);
-            if (dist < tol) {
-                norms.push_back(pair);
-            }
+
+    int count = 0;
+    auto ret = double3 { 0, 0, 0 };
+    for (auto &pair : norms) {
+        auto dist = bg::distance(pair.second.segment, pt);
+        if (dist < tol) {
+            count ++;
+            ret = ret + pair.second.normal;
         }
     }
-
-    double3 ret = { 0, 0, 0 };
-    for (auto &pair : norms) {
-        ret = ret + pair.second;
-    }
-    if (norms.size()) {
-        ret = ret / norms.size();
-    }
-    return ret;
+    return count > 1 ? ret / count : ret;
 }
 
 auto extract_patch(const Shape &shape, const Point &min, const Point &max, int dir, double ext, double len) {
@@ -525,7 +516,6 @@ auto extract_patch(const Shape &shape, const Point &min, const Point &max, int d
         return ret;
     }
     auto tol = fmin(max.x() - min.x(), max.y() - min.y()) * 1e-2;
-    //ret.polys = Box(min, max) - shape.polys;
     for (auto &poly : shape.polys) {
         auto outer = poly.outer();
         for (int i = 0, n = outer.size(); i < n - 1; i ++) {
@@ -621,8 +611,12 @@ Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
     for (auto &loop : loops) {
         for (int i = 0, n = loop.pts.size(); i < n; i ++) {
             auto &a = loop.pts[i], &b = loop.pts[(i + 1) % n];
-            auto s = Segment(pt_2d(a, dir), pt_2d(b, dir));
-            shape.tree.insert({ s, mesh.normals[a.f.x] });
+            auto u = pt_2d(a, dir), v = pt_2d(b, dir);
+            auto r = Box(
+                { fmin(u.x(), v.x()) - tol, fmin(u.y(), v.y()) - tol },
+                { fmax(u.x(), v.x()) + tol, fmax(u.y(), v.y()) + tol }
+            );
+            shape.tree.insert({ r, { Segment(u, v), mesh.normals[a.f.x] } });
         }
     }
 

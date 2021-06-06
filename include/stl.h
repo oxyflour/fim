@@ -33,8 +33,12 @@ namespace stl {
     typedef bg::model::box<Point> Box;
 
     namespace bgi = boost::geometry::index;
-    typedef pair<Segment, double3> RTValue;
-    typedef bgi::rtree<RTValue, bgi::quadratic<8, 4>> RTree;
+    struct RTValue {
+        Segment segment;
+        double3 normal;
+    };
+    typedef pair<Box, RTValue> RTPair;
+    typedef bgi::rtree<RTPair, bgi::quadratic<8, 4>> RTree;
 
     struct Shape {
         int order;
