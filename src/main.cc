@@ -20,46 +20,12 @@ auto is_dielec(string name) {
 auto mat_priority = map<string, int> {
 };
 
-auto export_svg(string file, map<int, stl::Shape> &shapes, function<bool(int)> test) {
-    auto list = vector<stl::Shape *>();
-    for (auto &[n, s] : shapes) {
-        if (test(n)) {
-            list.push_back(&s);
-        }
-    }
-    if (list.size()) {
-        ofstream fn(file);
-        stl::bg::svg_mapper<stl::Point> map(fn, 500, 500);
-        for (auto ptr : list) {
-            map.add(ptr->polys);
-        }
-        for (auto ptr : list) {
-            map.map(ptr->polys, "fill:blue;stroke:black;stroke-width:0.1");
-        }
-    }
-}
-
 auto min_delta(vector<double> arr) {
     double ret = DBL_MAX;
     for (int i = 0; i < arr.size() - 1; i ++) {
         ret = min(ret, arr[i + 1] - arr[i]);
     }
     return ret;
-}
-
-auto export_fragment(string prefix, grid::Grid &grid, stl::Fragments &frags) {
-    for (int i = 0; i < grid.nx; i ++) {
-        export_svg(prefix + ".x-" + to_string(i) + "-" + to_string(grid.xs[i]) + ".svg",
-            frags.x, [&, i](int n) { return grid.GetIndex(n).x == i; });
-    }
-    for (int j = 0; j < grid.ny; j ++) {
-        export_svg(prefix + ".y-" + to_string(j) + "-" + to_string(grid.ys[j]) + ".svg",
-            frags.y, [&, j](int n) { return grid.GetIndex(n).y == j; });
-    }
-    for (int k = 0; k < grid.nz; k ++) {
-        export_svg(prefix + ".z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
-            frags.z, [&, k](int n) { return grid.GetIndex(n).z == k; });
-    }
 }
 
 auto make_mesh() {
@@ -105,16 +71,12 @@ auto make_mesh() {
         a -= allMetal;
     }
 
-    auto bound = stl::extract_boundary(allMetal.z, grid, 2, EXT, 1);
-    for (int k = 0; k < grid.nz; k ++) {
-        export_svg("ALL_METAL.z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
-            bound, [&, k](int n) { return grid.GetIndex(n).z == k; });
-    }
+    allMetal.GetBoundary(grid, TOL, 0.1).Dump("all-metal", grid);
 
     // debug
     mats["ALL_METAL"] = allMetal;
     for (auto &[mat, frags] : mats) {
-        export_fragment("mat-" + mat, grid, frags);
+        frags.Dump("mat-" + mat, grid);
     }
 }
 
@@ -129,16 +91,15 @@ auto solve() {
     );
     auto grid = grid::Grid(utils::range(-1., 4., .2), utils::range(-1., 4., .2), utils::range(-1., 5., 1.));
     auto geometry = occ::Mesh::triangulate(shape);
+
     auto mesh = stl::load(geometry.verts, geometry.faces);
     stl::save("a.stl", mesh);
+
     auto splited = stl::Spliter(grid, mesh);
-    export_fragment("a-test", grid, splited.fragments);
-    auto bound = stl::Fragments {
-        stl::extract_boundary(splited.fragments.x, grid, 0, TOL, 0.1),
-        stl::extract_boundary(splited.fragments.y, grid, 1, TOL, 0.1),
-        stl::extract_boundary(splited.fragments.z, grid, 2, TOL, 0.1),
-    };
-    export_fragment("a-bound", grid, bound);
+    splited.fragments.Dump("a-test", grid);
+
+    auto bound = splited.fragments.GetBoundary(grid, TOL, 0.1);
+    bound.Dump("a-bound", grid);
 /*
     CHECK(proj.dt > 0, "cannot get dt from project");
     cout << "INFO: dt = " << proj.dt * 1e9 << " ns" << endl;

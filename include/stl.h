@@ -62,6 +62,8 @@ namespace stl {
 
     struct Fragments {
         map<int, Shape> x, y, z;
+        Fragments GetBoundary(grid::Grid &grid, double tol, double len);
+        void Dump(string prefix, grid::Grid &grid);
     };
 
     struct Locks {
@@ -93,6 +95,7 @@ namespace stl {
 
     // TODO
     map<int, Shape> extract_boundary(map<int, Shape> &a, grid::Grid &grid, int dir, double tol, double len = 1.);
+    void export_svg(string file, map<int, Shape> &shapes, function<bool(int)> test);
 }
 
 stl::Fragments& operator+=(stl::Fragments &a, stl::Fragments &b);

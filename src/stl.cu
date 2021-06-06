@@ -431,6 +431,48 @@ map<int, Shape>& operator-=(map<int, Shape> &a, map<int, Shape> &b) {
     return a;
 }
 
+void stl::export_svg(string file, map<int, Shape> &shapes, function<bool(int)> test) {
+    auto list = vector<stl::Shape *>();
+    for (auto &[n, s] : shapes) {
+        if (test(n)) {
+            list.push_back(&s);
+        }
+    }
+    if (list.size()) {
+        ofstream fn(file);
+        stl::bg::svg_mapper<stl::Point> map(fn, 500, 500);
+        for (auto ptr : list) {
+            map.add(ptr->polys);
+        }
+        for (auto ptr : list) {
+            map.map(ptr->polys, "fill:blue;stroke:black;stroke-width:0.1");
+        }
+    }
+}
+
+void Fragments::Dump(string prefix, grid::Grid &grid) {
+    for (int i = 0; i < grid.nx; i ++) {
+        export_svg(prefix + ".x-" + to_string(i) + "-" + to_string(grid.xs[i]) + ".svg",
+            x, [&, i](int n) { return grid.GetIndex(n).x == i; });
+    }
+    for (int j = 0; j < grid.ny; j ++) {
+        export_svg(prefix + ".y-" + to_string(j) + "-" + to_string(grid.ys[j]) + ".svg",
+            y, [&, j](int n) { return grid.GetIndex(n).y == j; });
+    }
+    for (int k = 0; k < grid.nz; k ++) {
+        export_svg(prefix + ".z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
+            z, [&, k](int n) { return grid.GetIndex(n).z == k; });
+    }
+}
+
+Fragments Fragments::GetBoundary(grid::Grid &grid, double tol, double len) {
+    return Fragments {
+        extract_boundary(x, grid, DIR_X, tol, len),
+        extract_boundary(y, grid, DIR_Y, tol, len),
+        extract_boundary(z, grid, DIR_Z, tol, len),
+    };
+}
+
 Fragments& operator+=(Fragments &a, Fragments &b) {
     a.x += b.x;
     a.y += b.y;
