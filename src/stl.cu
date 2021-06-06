@@ -433,7 +433,8 @@ map<int, Shape>& operator-=(map<int, Shape> &a, map<int, Shape> &b) {
 
 void stl::export_svg(string file, map<int, Shape> &shapes, function<bool(int)> test) {
     auto list = vector<stl::Shape *>();
-    for (auto &[n, s] : shapes) {
+    for (auto &pair : shapes) {
+        auto &n = pair.first; auto &s = pair.second;
         if (test(n)) {
             list.push_back(&s);
         }
@@ -487,12 +488,12 @@ Fragments& operator-=(Fragments &a, Fragments &b) {
     return a;
 }
 
-inline auto x_or_y_inside(Point &pt, Point &min, Point &max, double ext = 0) {
+inline auto x_or_y_inside(const Point &pt, const Point &min, const Point &max, double ext = 0) {
     auto x = pt.x(), y = pt.y();
     return (x > min.x() + ext && x < max.x() - ext) || (y > min.y() + ext && y < max.y() - ext);
 }
 
-inline auto get_normal(Shape &shape, Point &pt, double tol) {
+inline auto get_normal(const Shape &shape, Point &pt, double tol) {
     vector<RTValue> norms;
     shape.tree.query(bgi::intersects(pt), back_inserter(norms));
     if (!norms.size()) {
@@ -517,7 +518,7 @@ inline auto get_normal(Shape &shape, Point &pt, double tol) {
     return ret;
 }
 
-auto extract_patch(Shape &shape, Point &min, Point &max, int dir, double ext, double len) {
+auto extract_patch(const Shape &shape, const Point &min, const Point &max, int dir, double ext, double len) {
     auto area = bg::area(shape.polys);
     Shape ret;
     if (area < (max.x() - min.x()) * (max.y() - min.y()) * ext * 2) {
