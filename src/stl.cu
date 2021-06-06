@@ -460,7 +460,7 @@ inline auto get_normal(Shape &shape, Point &pt) {
             auto dist = bg::distance(pair.first, pt);
             auto a = pair.first.first, b = pair.first.second;
             auto len = bg::distance(a, b);
-            if (dist < len * 1e-4) {
+            if (dist < len * 1e-3) {
                 norms.push_back(pair);
             }
         }
@@ -482,7 +482,7 @@ auto extract_patch(Shape &shape, Point &min, Point &max, int dir, double ext, do
     if (area < (max.x() - min.x()) * (max.y() - min.y()) * ext * 2) {
         return ret;
     }
-    ret.polys = Box(min, max) - shape.polys;
+    //ret.polys = Box(min, max) - shape.polys;
     for (auto &poly : shape.polys) {
         auto outer = poly.outer();
         for (int i = 0, n = outer.size(); i < n - 1; i ++) {
@@ -494,13 +494,20 @@ auto extract_patch(Shape &shape, Point &min, Point &max, int dir, double ext, do
                 if (l) {
                     auto n = Point { v.x() / l, v.y() / l },
                         e = Point { n.y(), -n.x() };
-                    stl::Polygon poly;
-                    bg::append(poly, c);
-                    bg::append(poly, c - (n - e * 0.1) * len);
-                    bg::append(poly, c - (n + e * 0.1) * len);
-                    bg::append(poly, c);
-                    bg::correct(poly);
-                    ret.polys = ret.polys + poly;
+                    stl::Polygon arrow;
+                    bg::append(arrow, c);
+                    bg::append(arrow, c - (n - e * 0.1) * len);
+                    bg::append(arrow, c - (n + e * 0.1) * len);
+                    bg::append(arrow, c);
+                    bg::correct(arrow);
+                    stl::Polygon edge;
+                    bg::append(edge, a);
+                    bg::append(edge, a + n * len * 0.1);
+                    bg::append(edge, b + n * len * 0.1);
+                    bg::append(edge, b);
+                    bg::append(edge, a);
+                    bg::correct(edge);
+                    ret.polys = ret.polys + arrow + edge;
                 }
             }
         }
