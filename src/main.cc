@@ -105,7 +105,7 @@ auto make_mesh() {
         a -= allMetal;
     }
 
-    auto bound = stl::extract_boundary(allMetal.z, grid, 2, EXT);
+    auto bound = stl::extract_boundary(allMetal.z, grid, 2, EXT, 1);
     for (int k = 0; k < grid.nz; k ++) {
         export_svg("ALL_METAL.z-" + to_string(k) + "-" + to_string(grid.zs[k]) + ".svg",
             bound, [&, k](int n) { return grid.GetIndex(n).z == k; });
@@ -119,11 +119,18 @@ auto make_mesh() {
 }
 
 auto solve() {
-    auto box = occ::Builder::box(float3 { 0, 0, 0 }, float3 { 3, 3, 3 });
-    auto grid = grid::Grid({ -1, 0, 1, 2, 3, 4 }, { -1, 0, 1, 2, 3, 4 }, { -1, 0, 1, 2, 3, 4 });
-    auto geo = occ::Mesh::triangulate(box);
-    auto mesh = stl::Spliter(grid, stl::load(geo.verts, geo.faces));
-    export_fragment("a-test", grid, mesh.fragments);
+    auto shape = occ::Step::load("D:\\tri.stp");
+    auto grid = grid::Grid(utils::range(-1., 4., .2), utils::range(-1., 4., .2), utils::range(-1., 5., 1.));
+    auto geometry = occ::Mesh::triangulate(shape);
+    auto mesh = stl::load(geometry.verts, geometry.faces);
+    auto splited = stl::Spliter(grid, mesh);
+    export_fragment("a-test", grid, splited.fragments);
+    auto bound = stl::Fragments {
+        stl::extract_boundary(splited.fragments.x, grid, 0, TOL, 0.1),
+        stl::extract_boundary(splited.fragments.y, grid, 1, TOL, 0.1),
+        stl::extract_boundary(splited.fragments.z, grid, 2, TOL, 0.1),
+    };
+    export_fragment("a-bound", grid, bound);
 /*
     CHECK(proj.dt > 0, "cannot get dt from project");
     cout << "INFO: dt = " << proj.dt * 1e9 << " ns" << endl;

@@ -18,8 +18,8 @@ Grid::Grid(vector<double> xs, vector<double> ys, vector<double> zs) {
     this->nvar = this->nxyz * 3;
 }
 
-float3 Grid::At(int3 idx) {
-    return float3 { (float) xs[idx.x], (float) ys[idx.y], (float) zs[idx.z] };
+double3 Grid::At(int3 idx) {
+    return double3 { xs[idx.x], ys[idx.y], zs[idx.z] };
 }
 
 int Grid::GetIndex(int4 idx) {
@@ -44,12 +44,12 @@ int4 Grid::GetIndex(int i) {
     return int4 { i, j, k, d };
 }
 
-int3 Grid::FindIndex(float3 pos, float epsi) {
+int3 Grid::FindIndex(double3 pos, float epsi) {
     int nx = xs.size(), ny = ys.size(), nz = zs.size();
     for (int i = 0; i < nx; i ++) {
         for (int j = 0; j < ny; j ++) {
             for (int k = 0; k < nz; k ++) {
-                float3 pt = { (float) xs[i], (float) ys[j], (float) zs[k] };
+                auto pt = At(int3 { i, j, k });
                 if (length(pos - pt) < epsi) {
                     return int3 { i, j, k };
                 }
@@ -59,7 +59,7 @@ int3 Grid::FindIndex(float3 pos, float epsi) {
     return int3 { -1, -1, -1 };
 }
 
-vector<int3> Grid::ParsePort(float3 src, float3 dst, float epsi) {
+vector<int3> Grid::ParsePort(double3 src, double3 dst, float epsi) {
     auto i = FindIndex(src, epsi),
         j = FindIndex(dst, epsi);
     auto len = sum(abs(i - j));

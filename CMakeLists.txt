@@ -61,7 +61,7 @@ download_extract(
   https://prebuilt.oss-cn-shanghai.aliyuncs.com/occt-7.4-with-tbb.zip
   occt)
 download_extract(
-  https://dl.bintray.com/boostorg/release/1.75.0/source/boost_1_75_0.zip
+  https://prebuilt.oss-cn-shanghai.aliyuncs.com/boost_1_76_0.zip
   boost)
 download_extract(
   https://prebuilt.oss-cn-shanghai.aliyuncs.com/clipper_ver6.4.2.zip
@@ -82,7 +82,7 @@ add_custom_target(
 
 link_directories(${CMAKE_SOURCE_DIR}/build/occt/occt-7.4/lib)
 include_directories(${CMAKE_JS_INC} "${CMAKE_SOURCE_DIR}/include" "${CUDA_TOOLKIT_ROOT_DIR}/include")
-file(GLOB SOURCE_FILES "src/*.cc" "src/**/*.cc")
+file(GLOB SOURCE_FILES "src/*.cc" "src/**/*.cc" "build/clipper/cpp/*.cpp")
 cuda_add_executable(${PROJECT_NAME} ${SOURCE_FILES} "src/stl.cu" OPTIONS
   # TODO: check if debug
   -D_DEBUG
@@ -96,7 +96,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ${matplotlib_SOURCE_DIR}
   ${Python3_INCLUDE_DIRS}
   build/occt/occt-7.4/include
-  build/boost/boost_1_75_0
+  build/boost/boost_1_76_0
+  build/clipper/cpp
 )
 
 IF (WIN32)

@@ -104,8 +104,8 @@ string Project::MakeCacheAndLoadSettings(string cstDir, bool useCache) {
     auto meta = json::parse(utils::readFile(jsonPath.u8string()));
     for (auto item : meta["ports"]) {
         auto jSrc = item["src"], jDst = item["dst"];
-        auto src = make_float3(jSrc[0].get<float>(), jSrc[1].get<float>(), jSrc[2].get<float>());
-        auto dst = make_float3(jDst[0].get<float>(), jDst[1].get<float>(), jDst[2].get<float>());
+        auto src = double3 { jSrc[0].get<double>(), jSrc[1].get<double>(), jSrc[2].get<double>() };
+        auto dst = double3 { jDst[0].get<double>(), jDst[1].get<double>(), jDst[2].get<double>() };
         ports.push_back({ src, dst });
     }
     for (auto item : meta["solids"]) {
@@ -115,9 +115,9 @@ string Project::MakeCacheAndLoadSettings(string cstDir, bool useCache) {
         solids.push_back(solid_type { name, material, stl });
     }
     auto jUnits = meta["units"];
-    units.geometry = jUnits["geometry"].get<float>();
-    units.time = jUnits["time"].get<float>();
-    units.frequency = jUnits["frequency"].get<float>();
+    units.geometry = jUnits["geometry"].get<double>();
+    units.time = jUnits["time"].get<double>();
+    units.frequency = jUnits["frequency"].get<double>();
 
     for (auto x : meta["grid"]["xs"]) {
         xs.push_back(x.get<double>());

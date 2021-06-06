@@ -3,6 +3,7 @@
 #include <mutex>
 
 #include "utils/cuda.h"
+#include "utils/clipper.h"
 #include "grid.h"
 
 #ifndef STL_H
@@ -20,6 +21,7 @@
 
 namespace stl {
     using namespace std;
+    using namespace clipper;
 
     namespace bg = boost::geometry;
     typedef bg::model::d2::point_xy<double> Point;
@@ -37,8 +39,6 @@ namespace stl {
     struct Shape {
         int order;
         MultiPolygon polys;
-        // Note: check performance issue with lines even you don't use it
-        // MultiLine lines;
         RTree tree;
         Box bound;
     };
@@ -92,11 +92,12 @@ namespace stl {
     };
 
     // TODO
-    map<int, Shape> extract_boundary(map<int, Shape> &a, grid::Grid &grid, int dir, double tol);
+    map<int, Shape> extract_boundary(map<int, Shape> &a, grid::Grid &grid, int dir, double tol, double len = 1.);
 }
 
 stl::Fragments& operator+=(stl::Fragments &a, stl::Fragments &b);
 stl::Fragments& operator-=(stl::Fragments &a, stl::Fragments &b);
+
 stl::Point operator+(stl::Point &a, stl::Point &b);
 stl::Point operator/(stl::Point &a, double f);
 

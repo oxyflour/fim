@@ -15,7 +15,7 @@ namespace cst {
     using namespace std;
 
     struct port_type {
-        float3 src, dst;
+        double3 src, dst;
     };
 
     struct excitation_type {
@@ -27,7 +27,7 @@ namespace cst {
     };
 
     struct units_type {
-        float geometry, time, frequency;
+        double geometry, time, frequency;
     };
 
     struct Project {
@@ -51,13 +51,13 @@ namespace cst {
 private:
         string path;
         string version;
-        CSTProjHandle handle;
 
         bool keepCache = false;
         string cachePath;
         string MakeCacheAndLoadSettings(string cst, bool useCache);
 
 #ifdef USE_CST_DLL
+        CSTProjHandle handle;
         utils::DLL *dll;
 #endif
     };

@@ -172,9 +172,9 @@ Mesh stl::load(vector<double3> verts, vector<int3> faces, double tol) {
         mesh.max = fmax(mesh.max, pt);
     }
     for (auto fv : faces) {
-        int idx[3] = { pts[fv.x], pts[fv.y], pts[fv.z] };
-        if (idx[0] != idx[1] && idx[1] != idx[2] && idx[2] != idx[0]) {
-            mesh.faces.push_back(int3 { idx[0], idx[1], idx[2] });
+        auto face = int3 { pts[fv.x], pts[fv.y], pts[fv.z] };
+        if (face.x != face.y && face.y != face.z && face.z != face.x) {
+            mesh.faces.push_back(face);
         }
     }
     mesh.normals.resize(mesh.faces.size());
@@ -200,7 +200,7 @@ Mesh stl::load(string file, double tol) {
         // skip "outer loop"
         getline(fn, line);
 
-        int idx[3];
+        int3 face;
         for (int i = 0; i < 3; i ++) {
             double3 pt;
             getline(fn, line);
@@ -211,13 +211,16 @@ Mesh stl::load(string file, double tol) {
                 indices[rounded] = mesh.vertices.size();
                 mesh.vertices.push_back(rounded);
             }
-            idx[i] = indices[rounded];
+            auto idx = indices[rounded];
+            i == 0 ? (face.x = idx) :
+            i == 1 ? (face.y = idx) :
+                     (face.z = idx);
             mesh.min = fmin(mesh.min, pt);
             mesh.max = fmax(mesh.max, pt);
         }
 
-        if (idx[0] != idx[1] && idx[1] != idx[2] && idx[2] != idx[0]) {
-            mesh.faces.push_back(int3 { idx[0], idx[1], idx[2] });
+        if (face.x != face.y && face.y != face.z && face.z != face.x) {
+            mesh.faces.push_back(face);
             mesh.normals.push_back(norm);
         }
     }
@@ -324,11 +327,19 @@ auto make_polys(Loop &loop, int dir) {
     return poly;
 }
 
-stl::Point operator+(stl::Point &a, stl::Point &b) {
+stl::Point operator+ (stl::Point &a, stl::Point &b) {
     return stl::Point { a.x() + b.x(), a.y() + b.y() };
 }
 
-stl::Point operator/(stl::Point &a, double f) {
+stl::Point operator- (stl::Point &a, stl::Point &b) {
+    return stl::Point { a.x() - b.x(), a.y() - b.y() };
+}
+
+stl::Point operator* (stl::Point &a, double f) {
+    return stl::Point { a.x() * f, a.y() * f };
+}
+
+stl::Point operator/ (stl::Point &a, double f) {
     return stl::Point { a.x() / f, a.y() / f };
 }
 
@@ -441,7 +452,7 @@ inline auto x_or_y_inside(Point &pt, Point &min, Point &max, double ext = 0) {
 inline auto get_normal(Shape &shape, Point &pt) {
     vector<RTValue> norms;
     shape.tree.query(bgi::intersects(pt), back_inserter(norms));
-    double3 ret;
+    double3 ret = { 0, 0, 0 };
     for (auto &pair : norms) {
         ret = ret + pair.second;
     }
@@ -451,38 +462,45 @@ inline auto get_normal(Shape &shape, Point &pt) {
     return ret;
 }
 
-auto extract_patch(Shape &shape, Point &min, Point &max, double ext) {
+auto extract_patch(Shape &shape, Point &min, Point &max, int dir, double ext, double len) {
     auto area = bg::area(shape.polys);
     Shape ret;
     if (area < (max.x() - min.x()) * (max.y() - min.y()) * ext * 2) {
         return ret;
     }
     ret.polys = Box(min, max) - shape.polys;
-    printf("polys\n");
     for (auto &poly : shape.polys) {
-        printf("begin poly (%f %f), (%f %f)\n", min.x(), min.y(), max.x(), max.y());
         auto outer = poly.outer();
         for (int i = 0, n = outer.size(); i < n - 1; i ++) {
             auto &a = outer[i], &b = outer[i + 1], c = (a + b) / 2;
             if (x_or_y_inside(a, min, max) && x_or_y_inside(b, min, max)) {
                 auto norm = get_normal(shape, c);
-                // TODO: sum with normals
-                printf("edge %d: (%f %f), (%f %f): normal %f %f %f\n",
-                    i, a.x(), a.y(), b.x(), b.y(), norm.x, norm.y, norm.z);
+                auto v = pt_2d({ norm }, dir);
+                auto l = sqrt(v.x() * v.x() + v.y() * v.y());
+                if (l) {
+                    auto n = Point { v.x() / l, v.y() / l },
+                        e = Point { n.y(), -n.x() };
+                    stl::Polygon poly;
+                    bg::append(poly, c);
+                    bg::append(poly, c - (n - e * 0.1) * len);
+                    bg::append(poly, c - (n + e * 0.1) * len);
+                    bg::append(poly, c);
+                    bg::correct(poly);
+                    ret.polys = ret.polys + poly;
+                }
             }
         }
-        printf("end poly\n");
     }
     return ret;
 }
 
-map<int, Shape> stl::extract_boundary(map<int, Shape> &frags, grid::Grid &grid, int dir, double ext) {
+map<int, Shape> stl::extract_boundary(map<int, Shape> &frags, grid::Grid &grid, int dir, double ext, double len) {
     map<int, Shape> ret;
     for (auto &pair : frags) {
-        auto g = grid.GetIndex(pair.first);
-        auto min = double3 { grid.xs[g.x], grid.ys[g.y], grid.zs[g.z] } - ext / 2,
-            max = double3 { grid.xs[g.x+1], grid.ys[g.y+1], grid.zs[g.z+1] } + ext / 2;
-        auto shape = extract_patch(pair.second, pt_2d({ min }, dir), pt_2d({ max }, dir), ext);
+        auto idx = grid.GetIndex(pair.first);
+        auto g = int3 { idx.x, idx.y, idx.z };
+        auto min = grid.At(g) - ext / 2, max = grid.At(g + 1) + ext / 2;
+        auto shape = extract_patch(pair.second, pt_2d({ min }, dir), pt_2d({ max }, dir), dir, ext, len);
         if (shape.polys.size()) {
             ret[pair.first] = shape;
         }

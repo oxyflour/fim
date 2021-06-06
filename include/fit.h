@@ -11,7 +11,7 @@ namespace fit {
     using namespace std;
 
     struct Port {
-        float3 src, dst;
+        double3 src, dst;
         vector<int3> pos;
         int idx;
         int dir;
