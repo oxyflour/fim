@@ -22,6 +22,8 @@ namespace occ {
 
     struct Bool {
         static TopoDS_Shape common(const TopoDS_Shape &a, const TopoDS_Shape &b);
+        static TopoDS_Shape fuse(const TopoDS_Shape &a, const TopoDS_Shape &b);
+        static TopoDS_Shape cut(const TopoDS_Shape &a, const TopoDS_Shape &b);
     };
 
     struct Builder {

@@ -13,7 +13,10 @@
 #include <TopoDS_Edge.hxx>
 #include <TopExp_Explorer.hxx>
 
+#include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepAlgoAPI_Common.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
+
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepBndLib.hxx>
@@ -84,8 +87,7 @@ TopoDS_Shape Builder::component(vector<TopoDS_Shape> &shapes) {
     return ret;
 }
 
-TopoDS_Shape Bool::common(const TopoDS_Shape &a, const TopoDS_Shape &b) {
-    BRepAlgoAPI_Common api;
+template <class T> auto occ_bool(T &api, const TopoDS_Shape &a, const TopoDS_Shape &b) {
     TopTools_ListOfShape args, tools;
     args.Append(a);
     api.SetArguments(args);
@@ -93,6 +95,18 @@ TopoDS_Shape Bool::common(const TopoDS_Shape &a, const TopoDS_Shape &b) {
     api.SetTools(tools);
     api.Build();
     return api.Shape();
+}
+
+TopoDS_Shape Bool::common(const TopoDS_Shape &a, const TopoDS_Shape &b) {
+    return occ_bool(BRepAlgoAPI_Common(), a, b);
+}
+
+TopoDS_Shape Bool::fuse(const TopoDS_Shape &a, const TopoDS_Shape &b) {
+    return occ_bool(BRepAlgoAPI_Fuse(), a, b);
+}
+
+TopoDS_Shape Bool::cut(const TopoDS_Shape &a, const TopoDS_Shape &b) {
+    return occ_bool(BRepAlgoAPI_Cut(), a, b);
 }
 
 static auto getLinearProps(const TopoDS_Shape &shape) {

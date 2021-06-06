@@ -52,6 +52,7 @@ struct Point3D {
 
 struct Loop {
     vector<Point3D> pts;
+    double area;
     bool hole;
 };
 
@@ -271,7 +272,7 @@ auto get_rings(Mesh &mesh, Splited *splited, int num) {
     return rings;
 }
 
-auto is_reversed(vector<Point3D> &pts, int dir) {
+auto get_area(vector<Point3D> &pts, int dir) {
     double sum = 0;
     for (int i = 0, n = pts.size(); i < n; i ++) {
         auto &a = pts[i].p, &b = pts[(i + 1) % n].p;
@@ -283,7 +284,7 @@ auto is_reversed(vector<Point3D> &pts, int dir) {
             sum += (b.x - a.x) * (b.y + a.y);
         }
     }
-    return sum < 0;
+    return sum;
 }
 
 auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
@@ -293,20 +294,20 @@ auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
     for (auto &ring : rings) {
         auto &pts = ring;
 
-        auto reversed = is_reversed(pts, dir);
-        if (reversed) {
+        auto area = get_area(pts, dir);
+        if (area < 0) {
             reverse(pts.begin(), pts.end());
         }
 
         auto sum = 0.;
         for (int i = 0, s = pts.size(); i < s; i ++) {
             auto &a = pts[i], &b = pts[(i + 1) % s];
-            if (reversed) swap_xy(a.f);
+            if (area < 0) swap_xy(a.f);
             auto &n = mesh.normals[a.f.x];
             sum += dot(cross(a.p - b.p, n), norm);
         }
 
-        ret.push_back({ pts, sum > 0 });
+        ret.push_back({ pts, area, sum > 0 });
     }
     return ret;
 }
@@ -564,14 +565,14 @@ Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
     cudaFree(idx);
     cudaFree(splited);
 
-    for (auto &loop : loops) {
-        if (!loop.hole) {
-            shape.polys = shape.polys + make_polys(loop, dir);
-        }
-    }
+    sort(loops.begin(), loops.end(), [](Loop &a, Loop &b) {
+        return abs(a.area) > abs(b.area);
+    });
     for (auto &loop : loops) {
         if (loop.hole) {
             shape.polys = shape.polys - make_polys(loop, dir);
+        } else {
+            shape.polys = shape.polys + make_polys(loop, dir);
         }
     }
 

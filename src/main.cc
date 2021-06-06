@@ -119,10 +119,19 @@ auto make_mesh() {
 }
 
 auto solve() {
-    auto shape = occ::Step::load("D:\\tri.stp");
+    //auto shape = occ::Step::load("D:\\tri.stp");
+    auto center = float3 { 1.5, 1.5, 1.5 };
+    auto shape = occ::Bool::fuse(
+        occ::Bool::cut(
+            occ::Builder::sphere(center, 1.5),
+            occ::Builder::sphere(center, 1)
+        ),
+        occ::Builder::sphere(center, 0.5)
+    );
     auto grid = grid::Grid(utils::range(-1., 4., .2), utils::range(-1., 4., .2), utils::range(-1., 5., 1.));
     auto geometry = occ::Mesh::triangulate(shape);
     auto mesh = stl::load(geometry.verts, geometry.faces);
+    stl::save("a.stl", mesh);
     auto splited = stl::Spliter(grid, mesh);
     export_fragment("a-test", grid, splited.fragments);
     auto bound = stl::Fragments {
