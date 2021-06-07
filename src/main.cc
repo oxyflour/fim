@@ -1,4 +1,4 @@
-#include <ctpl_stl.h>
+#include <ctpl.h>
 #include <regex>
 
 #include "utils/check.h"
@@ -33,6 +33,8 @@ auto make_mesh() {
     auto grid = grid::Grid(proj.xs, proj.ys, proj.zs);
     cout << "INFO: grid = " << grid.xs.size() << "x" << grid.ys.size() << "x" << grid.zs.size() << endl;
 
+    ctpl::thread_pool pool;
+
     auto start = utils::clockNow();
     auto mats = map<string, stl::Fragments>();
     for (auto &solid : proj.solids) {
@@ -40,7 +42,7 @@ auto make_mesh() {
         // used when merging all metals
         mesh.order = mat_priority[solid.material];
 
-        auto fragments = stl::Spliter(grid, mesh, TOL, EXT).fragments;
+        auto fragments = stl::Spliter(grid, mesh, pool, TOL, EXT).fragments;
         if (mats.count(solid.material)) {
             mats[solid.material] += fragments;
         } else {
@@ -81,25 +83,6 @@ auto make_mesh() {
 }
 
 auto solve() {
-    auto center = float3 { 1.5, 1.5, 1.5 };
-    auto shape = occ::Bool::fuse(
-        occ::Bool::cut(
-            occ::Builder::sphere(center, 1.5),
-            occ::Builder::sphere(center, 1)
-        ),
-        occ::Builder::sphere(center, 0.5)
-    );
-    auto grid = grid::Grid(utils::range(-1., 4., .2), utils::range(-1., 4., .2), utils::range(-1., 5., 1.));
-    auto geometry = occ::Mesh::triangulate(shape);
-
-    auto mesh = stl::load(geometry.verts, geometry.faces);
-    stl::save("a.stl", mesh);
-
-    auto splited = stl::Spliter(grid, mesh);
-    splited.fragments.Dump("a-test", grid);
-
-    auto bound = splited.fragments.GetBoundary(grid, TOL, 0.1);
-    bound.Dump("a-bound", grid);
 /*
     CHECK(proj.dt > 0, "cannot get dt from project");
     cout << "INFO: dt = " << proj.dt * 1e9 << " ns" << endl;

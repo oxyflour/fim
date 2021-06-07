@@ -1,11 +1,10 @@
-#include "stl.h"
-#include "ctpl_stl.h"
-#include "utils.h"
-
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <set>
+
+#include "stl.h"
+#include "utils.h"
 
 using namespace std;
 using namespace stl;
@@ -672,7 +671,7 @@ void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
     }
 }
 
-stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, double tol, double ext) {
+stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, ctpl::thread_pool &pool, double tol, double ext) {
     this->tol = tol;
     this->ext = ext;
     min = mesh.min; max = mesh.max;
@@ -699,17 +698,25 @@ stl::Spliter::Spliter(grid::Grid &grid, Mesh &mesh, double tol, double ext) {
     from_device(normals, faceNum, mesh.normals.data());
     from_device(bounds, faceNum, mesh.bounds.data());
 
-    ctpl::thread_pool pool(thread::hardware_concurrency());
+    auto futures = vector<future<void>>();
     for (int i = 0; i < nx; i ++) {
-        pool.push([&, i](int id) { SliceX(grid, mesh, i); });
+        if (mesh.min.x <= grid.xs[i] && grid.xs[i] <= mesh.max.x) {
+            futures.push_back(pool.push([&, i](int id) { SliceX(grid, mesh, i); }));
+        }
     }
     for (int j = 0; j < ny; j ++) {
-        pool.push([&, j](int id) { SliceY(grid, mesh, j); });
+        if (mesh.min.y <= grid.ys[j] && grid.ys[j] <= mesh.max.y) {
+            futures.push_back(pool.push([&, j](int id) { SliceY(grid, mesh, j); }));
+        }
     }
     for (int k = 0; k < nz; k ++) {
-        pool.push([&, k](int id) { SliceZ(grid, mesh, k); });
+        if (mesh.min.z <= grid.zs[k] && grid.zs[k] <= mesh.max.z) {
+            futures.push_back(pool.push([&, k](int id) { SliceZ(grid, mesh, k); }));
+        }
     }
-    pool.stop(true);
+    for (auto &future : futures) {
+        future.wait();
+    }
 }
 
 stl::Spliter::~Spliter() {

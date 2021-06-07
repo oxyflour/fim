@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <ctpl.h>
 
 #include "utils/cuda.h"
 #include "utils/clipper.h"
@@ -75,7 +76,7 @@ namespace stl {
     };
 
     struct Spliter {
-        Spliter(grid::Grid &grid, Mesh &mesh, double tol = 1e-4, double ext = 1e-2);
+        Spliter(grid::Grid &grid, Mesh &mesh, ctpl::thread_pool &pool, double tol = 1e-4, double ext = 1e-2);
         ~Spliter();
         Fragments fragments;
     private:

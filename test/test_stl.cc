@@ -1,3 +1,5 @@
+#include <ctpl.h>
+
 #include "cst.h"
 #include "occ.h"
 #include "stl.h"
@@ -10,7 +12,8 @@ int main() {
     auto mesh = stl::load(geometry.verts, geometry.faces);
 
     auto grid = grid::Grid(utils::range(-2., 3., 1.), utils::range(-2., 3., 1.), utils::range(-2., 3., 1.));
-    auto splited = stl::Spliter(grid, mesh);
+    ctpl::thread_pool pool(std::thread::hardware_concurrency());
+    auto splited = stl::Spliter(grid, mesh, pool);
     splited.fragments.Dump("a-test", grid);
 
     auto bound = splited.fragments.GetBoundary(grid, TOL, 0.1);

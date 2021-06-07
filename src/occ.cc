@@ -1,7 +1,6 @@
-#include <ctpl_stl.h>
-
 #include <vector>
 #include <algorithm>
+#include <ctpl.h>
 
 #include <gp_Pln.hxx>
 #include <Bnd_Box.hxx>
