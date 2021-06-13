@@ -11,7 +11,7 @@ using namespace std;
 
 template <class T> auto export_shape(string file, T polys) {
     ofstream fn(file);
-    stl::bg::svg_mapper<stl::Point> map(fn, 500, 500);
+    stl::bg::svg_mapper<stl::Point> map(fn, 400, 400);
     map.add(polys);
     map.map(polys, "fill:blue;stroke:black;stroke-width:0.1");
 }
@@ -20,49 +20,54 @@ struct Joint {
     int i, j, k;
     stl::Point p;
     bool removed;
+    Joint *next;
 };
 struct Ending {
     Joint *a, *b;
 };
+struct PointArray {
+    stl::Point *ptr;
+    size_t num;
+};
 auto slice(stl::Polygon &poly, int dir, double pos, int side) {
-    vector<vector<stl::Point>> rings(1 + poly.inners().size());
+    vector<PointArray> rings(1 + poly.inners().size());
     auto &outer = poly.outer();
-    for (int i = 0; i < outer.size() - 1; i ++) {
-        rings[0].push_back(outer[i]);
-    }
+    rings[0] = { outer.data(), outer.size() - 1 };
     auto &inners = poly.inners();
     for (int k = 0; k < inners.size(); k ++) {
-        for (int i = 0; i < inners[k].size() - 1; i ++) {
-            rings[k + 1].push_back(inners[k][i]);
-        }
+        rings[k + 1] = { inners[k].data(), inners[k].size() - 1 };
     }
 
     vector<Joint *> joints;
     vector<vector<Ending>> ends;
-    vector<int> holes;
+    vector<int> outside;
     for (auto &ring : rings) {
-        ends.push_back(vector<Ending>(ring.size()));
+        ends.push_back(vector<Ending>(ring.num));
     }
     for (int k = 0; k < rings.size(); k ++) {
         auto &r = rings[k];
         auto &e = ends[k];
         auto is_sliced = false;
-        for (int i = 0, n = r.size(); i < n; i ++) {
+        for (int i = 0, n = r.num; i < n; i ++) {
             auto j = (i + 1) % n;
-            auto &a = r[i], &b = r[j];
+            auto &a = r.ptr[i], &b = r.ptr[j];
             auto test = dir == 0 ? (a.x() - pos) * (b.x() - pos)   : (a.y() - pos) * (b.y() - pos),
-                fac =   dir == 0 ? (a.x() - pos) / (a.x() - b.x()) : (a.y() - pos) / (a.y() - b.x());
+                 fac =  dir == 0 ? (a.x() - pos) / (a.x() - b.x()) : (a.y() - pos) / (a.y() - b.x());
             if (test < 0) {
                 auto p = a * (1 - fac) + b * fac;
-                auto joint = new Joint { i, j, k, p, false };
+                auto joint = new Joint { i, j, k, p, false, NULL };
                 joints.push_back(joint);
                 e[i].a == NULL ? (e[i].a = joint) : (e[i].b = joint);
                 e[j].a == NULL ? (e[j].a = joint) : (e[j].b = joint);
                 is_sliced = true;
             }
         }
-        if (!is_sliced) {
-            holes.push_back(k);
+        if (!is_sliced && r.num > 0) {
+            auto p = r.ptr[0];
+            auto position = dir == 0 ? p.x() : p.y();
+            if ((position - pos) * side > 0) {
+                outside.push_back(k);
+            }
         }
     }
     sort(joints.begin(), joints.end(), [dir](Joint *a, Joint *b) {
@@ -70,13 +75,27 @@ auto slice(stl::Polygon &poly, int dir, double pos, int side) {
     });
 
     stl::MultiPolygon ret;
+    if (!joints.size()) {
+        if (outer.size()) {
+            auto p = outer[0];
+            auto position = dir == 0 ? p.x() : p.y();
+            if ((position - pos) * side > 0) {
+                ret.push_back(poly);
+            }
+        }
+        return ret;
+    }
+    for (int i = 0; i < joints.size() - 1; i ++) {
+        joints[i]->next = joints[i + 1];
+    }
+
     auto iter = find_if(joints.begin(), joints.end(), [](Joint *a) { return !a->removed; });
     while (iter != joints.end()) {
         auto idx = distance(joints.begin(), iter);
-        auto a = joints[idx], b = joints[idx + 1];
+        auto a = joints[idx], b = a->next;
+
         stl::Polygon poly;
         auto &ring = poly.outer();
-
         while (a && b) {
             ring.push_back(a->p);
             ring.push_back(b->p);
@@ -84,22 +103,24 @@ auto slice(stl::Polygon &poly, int dir, double pos, int side) {
 
             auto &r = rings[b->k];
             auto &e = ends[b->k];
-            auto inversed = ((dir == 0) ? r[b->i].x() : r[b->i].y()) * side > 0;
+            auto position = dir == 0 ? r.ptr[b->i].x() : r.ptr[b->i].y();
+            auto inversed = (position - pos) * side > 0;
             auto i = inversed ? b->i : b->j;
             auto d = inversed ? -1 : 1;
             while (true) {
-                ring.push_back(r[i]);
-                auto joint = e[i].a == b ? e[i].b : e[i].a;
+                ring.push_back(r.ptr[i]);
+                auto &ending = e[i];
+                auto joint = ending.a == b ? ending.b : ending.a;
                 if (joint && joint != b) {
                     if (joint->removed) {
                         a = b = NULL;
                     } else {
                         a = joint;
-                        b = *(find(joints.begin(), joints.end(), joint) + 1);
+                        b = joint->next;
                     }
                     break;
                 } else {
-                    i = (i + d + r.size()) % r.size();
+                    i = (i + d + r.num) % r.num;
                 }
             }
         }
@@ -108,11 +129,14 @@ auto slice(stl::Polygon &poly, int dir, double pos, int side) {
 
         iter = find_if(joints.begin(), joints.end(), [](Joint *a) { return !a->removed; });
     }
+    for (auto joint : joints) {
+        delete joint;
+    }
 
-    for (auto k : holes) {
+    for (auto k : outside) {
         auto p = stl::Polygon();
-        auto &outer = p.outer();
-        outer.insert(outer.begin(), inners[k - 1].begin(), inners[k - 1].end());
+        auto &out = p.outer();
+        out.insert(out.begin(), inners[k - 1].begin(), inners[k - 1].end());
         stl::bg::correct(p);
         ret = ret - p;
     }
@@ -120,13 +144,12 @@ auto slice(stl::Polygon &poly, int dir, double pos, int side) {
 }
 
 auto clip(stl::MultiPolygon &c, int dir, double min, double max) {
-    stl::MultiPolygon e;
+    stl::MultiPolygon e, f;
     for (auto &p : c) {
-        e = e + slice(p, dir, min, -1);
+        e = e + slice(p, dir, min, 1);
     }
-    stl::MultiPolygon f;
     for (auto &p : e) {
-        f = f + slice(p, dir, max, 1);
+        f = f + slice(p, dir, max, -1);
     }
     return f;
 }
@@ -155,22 +178,27 @@ int main() {
     ")", b);
     auto c = stl::MultiPolygon() + a - b;
 
+    double xmin = 150, xmax = 250;
+    stl::MultiPolygon u, v;
     {
         auto start = utils::clockNow();
         for (int i = 0; i < 10000; i ++) {
-            auto d = clip(c, 0, 110, 190);
+            u = clip(c, 0, xmin, xmax);
         }
         printf("t1: %f s\n", utils::secondsSince(start));
     }
     {
-        auto b = stl::Box({ 110, 0 }, { 190, 500 });
+        auto b = stl::Box({ xmin, 0 }, { xmax, 500 });
         auto start = utils::clockNow();
         for (int i = 0; i < 10000; i ++) {
-            auto d = c * b;
+            v = c * b;
         }
         printf("t2: %f s\n", utils::secondsSince(start));
     }
+    printf("d1: %s\n", stl::bg::to_wkt(u).c_str());
+    printf("d2: %s\n", stl::bg::to_wkt(v).c_str());
+    export_shape("d1.svg", u);
+    export_shape("d2.svg", v);
 
-    //export_shape("out.svg", clip(c, 0, 110, 190));
     return 0;
 }
