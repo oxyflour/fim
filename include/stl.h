@@ -101,6 +101,14 @@ namespace stl {
     // TODO
     map<int, Shape> extract_boundary(map<int, Shape> &a, grid::Grid &grid, int dir, double tol, double len = 1.);
     void export_svg(string file, map<int, Shape> &shapes, function<bool(int)> test);
+    MultiPolygon clip(MultiPolygon &c, int dir, double min, double max);
+
+    template <class T> auto export_shape(string file, T polys) {
+        ofstream fn(file);
+        bg::svg_mapper<Point> map(fn, 400, 400);
+        map.add(polys);
+        map.map(polys, "fill:blue;stroke:black;stroke-width:0.1");
+    }
 }
 
 stl::Fragments& operator+= (stl::Fragments &a, stl::Fragments &b);

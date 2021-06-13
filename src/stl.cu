@@ -701,3 +701,141 @@ stl::Spliter::~Spliter() {
     cudaFree(normals);
     cudaFree(bounds);
 }
+
+struct ClipJoint {
+    int i, j, k;
+    Point p;
+    bool removed;
+    ClipJoint *next;
+};
+struct Ending {
+    ClipJoint *a, *b;
+};
+struct PointArray {
+    Point *ptr;
+    size_t num;
+};
+auto slice(stl::Polygon &poly, int dir, double pos, int side) {
+    vector<PointArray> rings(1 + poly.inners().size());
+    auto &outer = poly.outer();
+    rings[0] = { outer.data(), outer.size() - 1 };
+    auto &inners = poly.inners();
+    for (int k = 0; k < inners.size(); k ++) {
+        rings[k + 1] = { inners[k].data(), inners[k].size() - 1 };
+    }
+
+    vector<ClipJoint *> joints;
+    vector<vector<Ending>> ends;
+    vector<int> outside;
+    for (auto &ring : rings) {
+        ends.push_back(vector<Ending>(ring.num));
+    }
+    for (int k = 0; k < rings.size(); k ++) {
+        auto &r = rings[k];
+        auto &e = ends[k];
+        auto is_sliced = false;
+        for (int i = 0, n = r.num; i < n; i ++) {
+            auto j = (i + 1) % n;
+            auto &a = r.ptr[i], &b = r.ptr[j];
+            auto test = dir == 0 ? (a.x() - pos) * (b.x() - pos)   : (a.y() - pos) * (b.y() - pos),
+                 fac =  dir == 0 ? (a.x() - pos) / (a.x() - b.x()) : (a.y() - pos) / (a.y() - b.y());
+            if (test < 0) {
+                auto p = a * (1 - fac) + b * fac;
+                auto joint = new ClipJoint { i, j, k, p, false, NULL };
+                joints.push_back(joint);
+                e[i].a == NULL ? (e[i].a = joint) : (e[i].b = joint);
+                e[j].a == NULL ? (e[j].a = joint) : (e[j].b = joint);
+                is_sliced = true;
+            }
+        }
+        if (!is_sliced && r.num > 0) {
+            auto p = r.ptr[0];
+            auto position = dir == 0 ? p.x() : p.y();
+            if ((position - pos) * side > 0) {
+                outside.push_back(k);
+            }
+        }
+    }
+    sort(joints.begin(), joints.end(), [dir](ClipJoint *a, ClipJoint *b) {
+        return dir == 0 ? a->p.y() < b->p.y() : a->p.x() < b->p.x();
+    });
+
+    MultiPolygon ret;
+    if (!joints.size()) {
+        if (outer.size()) {
+            auto p = outer[0];
+            auto position = dir == 0 ? p.x() : p.y();
+            if ((position - pos) * side > 0) {
+                ret.push_back(poly);
+            }
+        }
+        return ret;
+    }
+    for (int i = 0; i < joints.size() - 1; i ++) {
+        joints[i]->next = joints[i + 1];
+    }
+
+    auto iter = find_if(joints.begin(), joints.end(), [](ClipJoint *a) { return !a->removed; });
+    while (iter != joints.end()) {
+        auto idx = distance(joints.begin(), iter);
+        auto a = joints[idx], b = a->next;
+
+        stl::Polygon poly;
+        auto &ring = poly.outer();
+        while (a && b) {
+            ring.push_back(a->p);
+            ring.push_back(b->p);
+            a->removed = b->removed = true;
+
+            auto &r = rings[b->k];
+            auto &e = ends[b->k];
+            auto &p = r.ptr[b->i];
+            auto inversed = ((dir == 0 ? p.x() : p.y()) - pos) * side > 0;
+            auto i = inversed ? b->i : b->j;
+            auto d = inversed ? -1 : 1;
+            while (true) {
+                ring.push_back(r.ptr[i]);
+                auto &ending = e[i];
+                auto joint = ending.a == b ? ending.b : ending.a;
+                if (joint && joint != b) {
+                    if (joint->removed) {
+                        a = b = NULL;
+                    } else {
+                        a = joint;
+                        b = joint->next;
+                    }
+                    break;
+                } else {
+                    i = (i + d + r.num) % r.num;
+                }
+            }
+        }
+        bg::correct(poly);
+        ret.push_back(poly);
+
+        iter = find_if(joints.begin(), joints.end(), [](ClipJoint *a) { return !a->removed; });
+    }
+    for (auto joint : joints) {
+        delete joint;
+    }
+
+    for (auto k : outside) {
+        auto p = stl::Polygon();
+        auto &out = p.outer();
+        out.insert(out.begin(), inners[k - 1].begin(), inners[k - 1].end());
+        bg::correct(p);
+        ret = ret - p;
+    }
+    return ret;
+}
+
+MultiPolygon stl::clip(MultiPolygon &c, int dir, double min, double max) {
+    MultiPolygon e, f;
+    for (auto &p : c) {
+        e = e + slice(p, dir, min, 1);
+    }
+    for (auto &p : e) {
+        f = f + slice(p, dir, max, -1);
+    }
+    return f;
+}
