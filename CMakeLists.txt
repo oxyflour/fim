@@ -81,7 +81,6 @@ add_custom_target(
 )
 
 link_directories(${CMAKE_SOURCE_DIR}/build/occt/occt-7.4/lib)
-message(${json_SOURCE_DIR})
 include_directories(
   ${CMAKE_SOURCE_DIR}/include
   ${CUDA_TOOLKIT_ROOT_DIR}/include
@@ -98,7 +97,16 @@ include_directories(
 file(GLOB SOURCE_FILES "src/*.cc" "src/**/*.cc" "build/clipper/cpp/*.cpp")
 list(REMOVE_ITEM SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/main.cc)
 set(LINK_LIBRARIES_LIST Python3::Python nlohmann_json::nlohmann_json TKBin TKBinL TKBinTObj TKBinXCAF TKBO TKBool TKBRep TKCAF TKCDF TKD3DHost TKDCAF TKDFBrowser TKDraw TKernel TKFeat TKFillet TKG2d TKG3d TKGeomAlgo TKGeomBase TKHLR TKIGES TKIVtk TKIVtkDraw TKLCAF TKMath TKMesh TKMeshVS TKOffset TKOpenGl TKPrim TKQADraw TKRWMesh TKService TKShapeView TKShHealing TKStd TKStdL TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKSTL TKTInspector TKTInspectorAPI TKTObj TKTObjDRAW TKToolsDraw TKTopAlgo TKTopTest TKTreeModel TKV3d TKVCAF TKView TKViewerTest TKVInspector TKVRML TKXCAF TKXDEDRAW TKXDEIGES TKXDESTEP TKXMesh TKXml TKXmlL TKXmlTObj TKXmlXCAF TKXSBase TKXSDRAW)
+# Note: add following lines to your vscode settings (https://github.com/microsoft/vscode-cmake-tools/issues/1298)
+#"cmake.configureSettings": {
+#   "CMAKE_BUILD_TYPE": "${buildType}"
+#}
+if (${CMAKE_BUILD_TYPE} MATCHES Debug)
 cuda_add_library(mylib ${SOURCE_FILES} "src/stl.cu" OPTIONS -D_DEBUG -Xcompiler "/wd4819,/MDd")
+else ()
+cuda_add_library(mylib ${SOURCE_FILES} "src/stl.cu" OPTIONS -Xcompiler "/wd4819,/MD")
+endif ()
+
 add_dependencies(mylib include_generated)
 
 add_executable(${PROJECT_NAME} "src/main.cc")

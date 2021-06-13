@@ -103,10 +103,33 @@ namespace stl {
     void export_svg(string file, map<int, Shape> &shapes, function<bool(int)> test);
 }
 
-stl::Fragments& operator+=(stl::Fragments &a, stl::Fragments &b);
-stl::Fragments& operator-=(stl::Fragments &a, stl::Fragments &b);
+stl::Fragments& operator+= (stl::Fragments &a, stl::Fragments &b);
+stl::Fragments& operator-= (stl::Fragments &a, stl::Fragments &b);
 
-stl::Point operator+(stl::Point &a, stl::Point &b);
-stl::Point operator/(stl::Point &a, double f);
+stl::Point operator+ (stl::Point &a, stl::Point &b);
+stl::Point operator/ (stl::Point &a, double f);
+stl::Point operator- (stl::Point &a, stl::Point &b);
+stl::Point operator* (stl::Point &a, double f);
+
+template <typename T> auto operator+(stl::MultiPolygon &shape, T &poly) {
+    stl::MultiPolygon output;
+    stl::bg::union_(shape, poly, output);
+    return output;
+}
+template <typename T> auto operator-(stl::MultiPolygon &shape, T &poly) {
+    stl::MultiPolygon output;
+    stl::bg::difference(shape, poly, output);
+    return output;
+}
+template <typename T> auto operator-(stl::Box &shape, T &poly) {
+    stl::MultiPolygon output;
+    stl::bg::difference(shape, poly, output);
+    return output;
+}
+template <typename T> auto operator*(stl::MultiPolygon &shape, T &poly) {
+    stl::MultiPolygon output;
+    stl::bg::intersection(shape, poly, output);
+    return output;
+}
 
 #endif

@@ -343,30 +343,6 @@ stl::Point operator/ (stl::Point &a, double f) {
     return stl::Point { a.x() / f, a.y() / f };
 }
 
-template <typename T> auto operator+(MultiPolygon &shape, T &poly) {
-    MultiPolygon input;
-    bg::union_(shape, poly, input);
-    return input;
-}
-
-template <typename T> auto operator-(MultiPolygon &shape, T &poly) {
-    MultiPolygon input;
-    bg::difference(shape, poly, input);
-    return input;
-}
-
-template <typename T> auto operator-(Box &shape, T &poly) {
-    MultiPolygon input;
-    bg::difference(shape, poly, input);
-    return input;
-}
-
-template <typename T> auto operator*(MultiPolygon &shape, T &poly) {
-    MultiPolygon input;
-    bg::intersection(shape, poly, input);
-    return input;
-}
-
 inline auto operator+(RTree &a, RTree &b) {
     RTree tree = a;
     for (auto &item : b) {
