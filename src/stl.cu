@@ -380,6 +380,19 @@ inline auto operator*(Shape &a, Box &b) {
     return shape;
 }
 
+Shape clip_dir(Shape &a, Box &b, int dir) {
+    Shape shape;
+    if (a.polys.size() && bg::intersects(a.bound, b)) {
+        auto min = dir == 0 ? b.min_corner().x() : b.min_corner().y(),
+            max = dir == 0 ? b.max_corner().x() : b.max_corner().y();
+        shape.polys = clip(a.polys, dir, min, max);
+        a.tree.query(bgi::intersects(b), bgi::inserter(shape.tree));
+        bg::envelope(shape.polys, shape.bound);
+    }
+    shape.order = a.order;
+    return shape;
+}
+
 // Note: structured binding not working in nvcc
 map<int, Shape>& operator+=(map<int, Shape> &a, map<int, Shape> &b) {
     for (auto &pair : b) {
@@ -604,9 +617,11 @@ void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
         shape = a + b;
     for (int j = 0; j < ny - 1; j ++) {
         auto dy = ys[j + 1] - ys[j];
-        auto stride = shape * Box({ ys[j] - ext, min.z }, { ys[j + 1] + ext, max.z });
+        auto stride = clip_dir(shape, Box({ ys[j] - ext, min.z }, { ys[j + 1] + ext, max.z }), 0);
+        //auto stride = shape * Box({ ys[j] - ext, min.z }, { ys[j + 1] + ext, max.z });
         for (int k = 0; k < nz - 1; k ++) {
-            auto patch = stride * Box({ min.y, zs[k] - ext }, { max.y, zs[k + 1] + ext });
+            auto patch = clip_dir(stride, Box({ min.y, zs[k] - ext }, { max.y, zs[k + 1] + ext }), 1);
+            //auto patch = stride * Box({ min.y, zs[k] - ext }, { max.y, zs[k + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.x);
                 fragments.x[grid.GetIndex(i, j, k)] = patch;
@@ -620,9 +635,11 @@ void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
         b = Slice(mesh, ys[j] + tol/2, DIR_Y),
         shape = a + b;
     for (int k = 0; k < nz - 1; k ++) {
-        auto stride = shape * Box({ zs[k] - ext, min.x }, { zs[k + 1] + ext, max.x });
+        auto stride = clip_dir(shape, Box({ zs[k] - ext, min.x }, { zs[k + 1] + ext, max.x }), 0);
+        //auto stride = shape * Box({ zs[k] - ext, min.x }, { zs[k + 1] + ext, max.x });
         for (int i = 0; i < nx - 1; i ++) {
-            auto patch = stride * Box({ min.z, xs[i] - ext }, { max.z, xs[i + 1] + ext });
+            auto patch = clip_dir(stride, Box({ min.z, xs[i] - ext }, { max.z, xs[i + 1] + ext }), 1);
+            //auto patch = stride * Box({ min.z, xs[i] - ext }, { max.z, xs[i + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.y);
                 fragments.y[grid.GetIndex(i, j, k)] = patch;
@@ -636,9 +653,11 @@ void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
         b = Slice(mesh, zs[k] + tol/2, DIR_Z),
         shape = a + b;
     for (int i = 0; i < nx - 1; i ++) {
-        auto stride = shape * Box({ xs[i] - ext, min.y }, { xs[i + 1] + ext, max.y });
+        auto stride = clip_dir(shape, Box({ xs[i] - ext, min.y }, { xs[i + 1] + ext, max.y }), 0);
+        //auto stride = shape * Box({ xs[i] - ext, min.y }, { xs[i + 1] + ext, max.y });
         for (int j = 0; j < ny - 1; j ++) {
-            auto patch = stride * Box({ min.x, ys[j] - ext }, { max.x, ys[j + 1] + ext });
+            auto patch = clip_dir(stride, Box({ min.x, ys[j] - ext }, { max.x, ys[j + 1] + ext }), 1);
+            //auto patch = stride * Box({ min.x, ys[j] - ext }, { max.x, ys[j + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.z);
                 fragments.z[grid.GetIndex(i, j, k)] = patch;

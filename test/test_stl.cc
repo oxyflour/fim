@@ -9,21 +9,7 @@ constexpr double TOL = 1e-6, EXT = 1e-2;
 
 using namespace std;
 
-int main() {
-    /*
-    auto shape = occ::Builder::box(float3 { -1, .3, -1 }, float3 { 1, .6, 1 });
-    auto geometry = occ::Mesh::triangulate(shape);
-    auto mesh = stl::load(geometry.verts, geometry.faces);
-
-    auto grid = grid::Grid(utils::range(-2., 3., 1.), utils::range(-2., 3., 1.), utils::range(-2., 3., 1.));
-    ctpl::thread_pool pool(std::thread::hardware_concurrency());
-    auto splited = stl::Spliter(grid, mesh, pool);
-    splited.fragments.Dump("a-test", grid);
-
-    auto bound = splited.fragments.GetBoundary(grid, TOL, 0.1);
-    bound.Dump("a-bound", grid);
-     */
-
+auto test_clip() {
     stl::Polygon a, b;
     stl::bg::read_wkt("POLYGON("
         "(100 100, 100 200, 250 250, 200 100, 100 100)"
@@ -54,6 +40,21 @@ int main() {
     std::cout << std::setprecision(12) << stl::bg::wkt(v) << endl;
     stl::export_shape("d1.svg", u);
     stl::export_shape("d2.svg", v);
+}
 
+int main() {
+    auto shape = occ::Builder::sphere(float3 { 0, 0, 0 }, 1.5);
+    auto geometry = occ::Mesh::triangulate(shape);
+    auto mesh = stl::load(geometry.verts, geometry.faces);
+
+    auto grid = grid::Grid(utils::range(-2., 3., 0.1), utils::range(-2., 3., 0.1), utils::range(-2., 3., 0.1));
+    auto start = utils::clockNow();
+    ctpl::thread_pool pool(std::thread::hardware_concurrency());
+    auto splited = stl::Spliter(grid, mesh, pool);
+    cout << utils::secondsSince(start) << endl;
+    splited.fragments.Dump("a-test", grid);
+
+    auto bound = splited.fragments.GetBoundary(grid, TOL, 0.1);
+    bound.Dump("a-bound", grid);
     return 0;
 }
