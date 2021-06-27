@@ -43,7 +43,7 @@ auto test_clip() {
 }
 
 int main() {
-    auto shape = occ::Builder::sphere(float3 { 0, 0, 0 }, 1.5);
+    auto shape = occ::Builder::box(float3 { -1, -1, -1 }, float3 { 1, 1, 1 });
     auto geometry = occ::Mesh::triangulate(shape);
     auto mesh = stl::load(geometry.verts, geometry.faces);
 

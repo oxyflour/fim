@@ -26,16 +26,6 @@ constexpr auto
     NORM_Y = double3 { 0, 1, 0 },
     NORM_Z = double3 { 0, 0, 1 };
 
-struct Joint {
-    int2 e;
-    double3 p;
-};
-
-struct Splited {
-    int f;
-    Joint from, to;
-};
-
 struct Edge {
     int i, f;
 };
@@ -73,31 +63,34 @@ __global__ void kernel_prepare(
     }
 }
 
+__host__ __device__ __forceinline__ Splited split_face(
+    double3 *vertices, int3 *faces, int k, double val, int dir) {
+    auto &f = faces[k];
+    auto &a = vertices[f.x], &b = vertices[f.y], &c = vertices[f.z];
+    double3 m;
+    if (dir == DIR_X) {
+        m.x = a.x; m.y = b.x; m.z = c.x;
+    } else if (dir == DIR_Y) {
+        m.x = a.y; m.y = b.y; m.z = c.y;
+    } else if (dir == DIR_Z) {
+        m.x = a.z; m.y = b.z; m.z = c.z;
+    }
+    double3 u;
+    u.x = (m.x - val) / (m.x - m.y);
+    u.y = (m.y - val) / (m.y - m.z);
+    u.z = (m.z - val) / (m.z - m.x);
+    return u.x > 0 && u.x < 1 && u.y > 0 && u.y < 1 ?
+                Splited { k, f.x, f.y, lerp(a, b, u.x), f.y, f.z, lerp(b, c, u.y) } :
+           u.y > 0 && u.y < 1 && u.z > 0 && u.z < 1 ?
+                Splited { k, f.y, f.z, lerp(b, c, u.y), f.z, f.x, lerp(c, a, u.z) } :
+                Splited { k, f.z, f.x, lerp(c, a, u.z), f.x, f.y, lerp(a, b, u.x) };
+}
+
 __global__ void kernel_split(
     double3 *vertices, int3 *faces, int* bucket, int binLen, double val, int dir,
     Splited *out, int *idx) {
     for (int i = cuIdx(x); i < binLen; i += cuDim(x)) {
-        auto k = bucket[i];
-        auto &f = faces[k];
-        auto &a = vertices[f.x], &b = vertices[f.y], &c = vertices[f.z];
-        double3 m;
-        if (dir == DIR_X) {
-            m.x = a.x; m.y = b.x; m.z = c.x;
-        } else if (dir == DIR_Y) {
-            m.x = a.y; m.y = b.y; m.z = c.y;
-        } else if (dir == DIR_Z) {
-            m.x = a.z; m.y = b.z; m.z = c.z;
-        }
-        double3 u;
-        u.x = (m.x - val) / (m.x - m.y);
-        u.y = (m.y - val) / (m.y - m.z);
-        u.z = (m.z - val) / (m.z - m.x);
-        out[atomicAdd(idx, 1)] =
-            u.x > 0 && u.x < 1 && u.y > 0 && u.y < 1 ?
-                Splited { k, f.x, f.y, lerp(a, b, u.x), f.y, f.z, lerp(b, c, u.y) } :
-            u.y > 0 && u.y < 1 && u.z > 0 && u.z < 1 ?
-                Splited { k, f.y, f.z, lerp(b, c, u.y), f.z, f.x, lerp(c, a, u.z) } :
-                Splited { k, f.z, f.x, lerp(c, a, u.z), f.x, f.y, lerp(a, b, u.x) };
+        out[atomicAdd(idx, 1)] = split_face(vertices, faces, bucket[i], val, dir);
     }
 }
 
@@ -236,11 +229,11 @@ auto idx_of(int2 &i, int n) {
     return i.x < i.y ? i.x * n + i.y : i.y * n + i.x;
 }
 
-auto get_rings(Mesh &mesh, Splited *splited, int num) {
+auto get_rings(Mesh &mesh, vector<Splited> &splited) {
     auto maxVert = mesh.vertices.size() + 1;
     auto conns = map<int, Conn>();
     auto coord = map<int, double3>();
-    for (int i = 0; i < num; i ++) {
+    for (int i = 0, n = splited.size(); i < n; i ++) {
         auto &edge = splited[i];
         auto f = edge.f;
         auto from = idx_of(edge.from.e, maxVert),
@@ -286,8 +279,8 @@ auto get_area(vector<Point3D> &pts, int dir) {
     return sum;
 }
 
-auto get_loops(Mesh &mesh, Splited *splited, int num, int dir) {
-    auto rings = get_rings(mesh, splited, num);
+auto get_loops(Mesh &mesh, vector<Splited> &splited, int dir) {
+    auto rings = get_rings(mesh, splited);
     auto norm = dir == 0 ? NORM_X : dir == 1 ? NORM_Y : NORM_Z;
     auto ret = vector<Loop>();
     for (auto &ring : rings) {
@@ -380,7 +373,20 @@ inline auto operator*(Shape &a, Box &b) {
     return shape;
 }
 
-Shape clip_dir(Shape &a, Box &b, int dir) {
+auto round_by_y(Shape &a, double tol) {
+    for (auto &poly : a.polys) {
+        for (auto &pt : poly.outer()) {
+            pt.set<1>(round_by(pt.get<1>(), tol));
+        }
+        for (auto &inner : poly.inners()) {
+            for (auto &pt : inner) {
+                pt.set<1>(round_by(pt.get<1>(), tol));
+            }
+        }
+    }
+}
+
+Shape clip_with(Shape &a, Box &b, int dir) {
     Shape shape;
     if (a.polys.size() && bg::intersects(a.bound, b)) {
         auto min = dir == 0 ? b.min_corner().x() : b.min_corner().y(),
@@ -550,41 +556,53 @@ map<int, Shape> stl::extract_boundary(map<int, Shape> &frags, grid::Grid &grid, 
     return ret;
 }
 
-Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
-    auto bucket = malloc_device<int>(faceNum);
-    auto idx = malloc_device<int>(1);
-    auto splited = malloc_device<Splited>(faceNum);
+vector<Splited> stl::Spliter::Split(Mesh &mesh, double pos, int dir) {
+    auto vertices = mesh.vertices.data();
+    auto faces = mesh.faces.data();
+    auto splitedArr = vector<Splited>();
+    if (faceNum < 100) {
+        for (int k = 0, n = mesh.faces.size(); k < n; k ++) {
+            auto &b = mesh.bounds[k];
+            auto min = dir == DIR_X ? b.min.x : dir == DIR_Y ? b.min.y : b.min.z,
+                max = dir == DIR_X ? b.max.x : dir == DIR_Y ? b.max.y : b.max.z;
+            if (min < pos && pos < max) {
+                splitedArr.push_back(split_face(vertices, faces, k, pos, dir));
+            }
+        }
+    } else {
+        auto bucket = malloc_device<int>(faceNum);
+        auto idx = malloc_device<int>(1);
+        auto splited = malloc_device<Splited>(faceNum);
 
-    int bucketLen = 0;
-    to_device(&bucketLen, 1, idx);
-    kernel_group CU_DIM(256, 128) (vertices, faces, faceNum, bounds, pos, dir, bucket, idx);
-    CU_ASSERT(cudaGetLastError());
-    from_device(idx, 1, &bucketLen);
+        int bucketLen = 0;
+        to_device(&bucketLen, 1, idx);
+        kernel_group CU_DIM(256, 128) (vertices, faces, faceNum, bounds, pos, dir, bucket, idx);
+        CU_ASSERT(cudaGetLastError());
+        from_device(idx, 1, &bucketLen);
 
-    Shape shape;
-    shape.order = mesh.order;
-    if (bucketLen == 0) {
+        if (bucketLen > 0) {
+            int splitedLen = 0;
+            to_device(&splitedLen, 1, idx);
+            kernel_split CU_DIM(256, 128) (vertices, faces, bucket, bucketLen, pos, dir, splited, idx);
+            CU_ASSERT(cudaGetLastError());
+            from_device(idx, 1, &splitedLen);
+            splitedArr.resize(splitedLen);
+            from_device(splited, splitedLen, splitedArr.data());
+        }
+
         cudaFree(bucket);
         cudaFree(idx);
         cudaFree(splited);
-        return shape;
     }
+    return splitedArr;
+}
 
-    int splitedLen = 0;
-    to_device(&splitedLen, 1, idx);
-    kernel_split CU_DIM(256, 128) (vertices, faces, bucket, bucketLen, pos, dir, splited, idx);
-    CU_ASSERT(cudaGetLastError());
-    from_device(idx, 1, &splitedLen);
+Shape stl::Spliter::Slice(Mesh &mesh, double pos, int dir) {
+    auto splited = Split(mesh, pos, dir);
+    auto loops = get_loops(mesh, splited, dir);
 
-    auto splitedArr = new Splited[faceNum];
-    from_device(splited, splitedLen, splitedArr);
-    auto loops = get_loops(mesh, splitedArr, splitedLen, dir);
-
-    delete splitedArr;
-    cudaFree(bucket);
-    cudaFree(idx);
-    cudaFree(splited);
-
+    Shape shape;
+    shape.order = mesh.order;
     sort(loops.begin(), loops.end(), [](Loop &a, Loop &b) {
         return abs(a.area) > abs(b.area);
     });
@@ -617,10 +635,10 @@ void stl::Spliter::SliceX(grid::Grid &grid, Mesh &mesh, int i) {
         shape = a + b;
     for (int j = 0; j < ny - 1; j ++) {
         auto dy = ys[j + 1] - ys[j];
-        auto stride = clip_dir(shape, Box({ ys[j] - ext, min.z }, { ys[j + 1] + ext, max.z }), 0);
+        auto stride = clip_with(shape, Box({ ys[j] - tol/2, min.z }, { ys[j + 1] + tol/2, max.z }), 0); round_by_y(stride, tol);
         //auto stride = shape * Box({ ys[j] - ext, min.z }, { ys[j + 1] + ext, max.z });
         for (int k = 0; k < nz - 1; k ++) {
-            auto patch = clip_dir(stride, Box({ min.y, zs[k] - ext }, { max.y, zs[k + 1] + ext }), 1);
+            auto patch = clip_with(stride, Box({ min.y, zs[k] - tol/2 }, { max.y, zs[k + 1] + tol/2 }), 1);
             //auto patch = stride * Box({ min.y, zs[k] - ext }, { max.y, zs[k + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.x);
@@ -635,10 +653,10 @@ void stl::Spliter::SliceY(grid::Grid &grid, Mesh &mesh, int j) {
         b = Slice(mesh, ys[j] + tol/2, DIR_Y),
         shape = a + b;
     for (int k = 0; k < nz - 1; k ++) {
-        auto stride = clip_dir(shape, Box({ zs[k] - ext, min.x }, { zs[k + 1] + ext, max.x }), 0);
+        auto stride = clip_with(shape, Box({ zs[k] - tol/2, min.x }, { zs[k + 1] + tol/2, max.x }), 0); round_by_y(stride, tol);
         //auto stride = shape * Box({ zs[k] - ext, min.x }, { zs[k + 1] + ext, max.x });
         for (int i = 0; i < nx - 1; i ++) {
-            auto patch = clip_dir(stride, Box({ min.z, xs[i] - ext }, { max.z, xs[i + 1] + ext }), 1);
+            auto patch = clip_with(stride, Box({ min.z, xs[i] - tol/2 }, { max.z, xs[i + 1] + tol/2 }), 1);
             //auto patch = stride * Box({ min.z, xs[i] - ext }, { max.z, xs[i + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.y);
@@ -653,10 +671,10 @@ void stl::Spliter::SliceZ(grid::Grid &grid, Mesh &mesh, int k) {
         b = Slice(mesh, zs[k] + tol/2, DIR_Z),
         shape = a + b;
     for (int i = 0; i < nx - 1; i ++) {
-        auto stride = clip_dir(shape, Box({ xs[i] - ext, min.y }, { xs[i + 1] + ext, max.y }), 0);
+        auto stride = clip_with(shape, Box({ xs[i] - tol/2, min.y }, { xs[i + 1] + tol/2, max.y }), 0); round_by_y(stride, tol);
         //auto stride = shape * Box({ xs[i] - ext, min.y }, { xs[i + 1] + ext, max.y });
         for (int j = 0; j < ny - 1; j ++) {
-            auto patch = clip_dir(stride, Box({ min.x, ys[j] - ext }, { max.x, ys[j + 1] + ext }), 1);
+            auto patch = clip_with(stride, Box({ min.x, ys[j] - tol/2 }, { max.x, ys[j + 1] + tol/2 }), 1);
             //auto patch = stride * Box({ min.x, ys[j] - ext }, { max.x, ys[j + 1] + ext });
             if (patch.polys.size()) {
                 lock_guard<mutex> guard(locks.z);
@@ -774,6 +792,11 @@ auto slice(stl::Polygon &poly, int dir, double pos, int side) {
                 outside.push_back(k);
             }
         }
+    }
+    if (joints.size() % 2 != 0) {
+        throw runtime_error(string("slice at ") +
+            (dir ? "x" : "y") + "=" + to_string(pos) + " failed " +
+            "(" + to_string(joints.size()) + " joints)");
     }
     sort(joints.begin(), joints.end(), [dir](ClipJoint *a, ClipJoint *b) {
         return dir == 0 ? a->p.y() < b->p.y() : a->p.x() < b->p.x();

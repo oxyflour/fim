@@ -75,6 +75,16 @@ namespace stl {
         mutex x, y, z;
     };
 
+    struct Joint {
+        int2 e;
+        double3 p;
+    };
+
+    struct Splited {
+        int f;
+        Joint from, to;
+    };
+
     struct Spliter {
         Spliter(grid::Grid &grid, Mesh &mesh, ctpl::thread_pool &pool, double tol = 1e-4, double ext = 1e-2);
         ~Spliter();
@@ -92,6 +102,7 @@ namespace stl {
         Locks locks;
         double tol, ext;
 
+        vector<Splited> Split(Mesh &mesh, double pos, int dir);
         Shape Slice(Mesh &mesh, double pos, int dir);
         void SliceX(grid::Grid &grid, Mesh &mesh, int i);
         void SliceY(grid::Grid &grid, Mesh &mesh, int j);
